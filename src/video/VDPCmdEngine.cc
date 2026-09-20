@@ -2736,6 +2736,8 @@ void VDPCmdEngine::startLfmc(EmuTime time)
 	ADX = DX;
 	ANX = tmpNX;
 	fontWidthCount = 0;
+	fontColor = COL;
+	transfer = false;
 	setStatusChangeTime(EmuTime::zero());
 	status |= TR;
 	nextAccessSlot(time);
@@ -2776,7 +2778,7 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 	case 2: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 2; break; }
 		if (doPset) [[likely]] {
-			uint8_t col = (tmpSrc & 0x80) ? COL : vdp.getFontBackgroundColor();
+			uint8_t col = (tmpSrc & 0x80) ? fontColor : vdp.getFontBackgroundColor();
 			col &= Mode::COLOR_MASK;
 			Mode::pset(calculator.getTime(), vram, ADX, dstAddr,
 			           tmpDst, col, LogOp());
