@@ -93,7 +93,7 @@ public:
 	static constexpr int TICKS_HDISP_PERIOD = TICKS_DISP_BMP;
 	static constexpr int TICKS_BL_LATCH = 144 * CLK_MUL;
 	static constexpr int TICKS_DELAY_400 = 400 * CLK_MUL;
-	static constexpr int TICKS_DELAY_27 = 27 * CLK_MUL;
+	static constexpr int TICKS_DELAY_27 = CLK_MUL == 1 ? 27 : 112;
 
 	// Number of lines per frame.
 	static constexpr int PAL_LINES = 313;

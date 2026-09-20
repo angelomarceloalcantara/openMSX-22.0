@@ -62,7 +62,7 @@ void PixelRenderer::draw(
 		}
 
 		displayY &= 255; // Page wrap.
-		int displayWidth = (endX - (startX & ~1)) / VDP::TICKS_DIV_DHCLK;
+		int displayWidth = (endX - (startX & ~(VDP::TICKS_DIV_DHCLK - 1))) / VDP::TICKS_DIV_DHCLK;
 		int displayHeight = endY - startY;
 
 		assert(0 <= displayX);
