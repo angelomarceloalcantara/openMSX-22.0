@@ -151,11 +151,11 @@ public:
 	}
 
 	[[nodiscard]] bool isECOM() const {
-		return hasECOM() & ((controlRegs[20] & 0x20) != 0);
+		return hasV58() ? !isV58() : (hasECOM() & ((controlRegs[20] & 0x20) != 0));
 	}
 
 	[[nodiscard]] bool isEVR() const {
-		return hasEVR() & ((controlRegs[20] & 0x40) != 0);
+		return hasV58() ? !isV58() : (hasEVR() & ((controlRegs[20] & 0x40) != 0));
 	}
 
 	[[nodiscard]] bool isS16() const {
@@ -171,11 +171,19 @@ public:
 	}
 
 	[[nodiscard]] bool isFID() const {
-		return hasFID() & ((controlRegs[21] & 0x01) == 0);
+		return hasV58() ? !isV58() : (hasFID() & ((controlRegs[21] & 0x01) == 0));
 	}
 
-	[[nodiscard]] bool isV9968() const {
-		return (version & VM_V9968) != 0;
+	[[nodiscard]] bool isV58() const {
+		return hasV58() & ((controlRegs[21] & 0x01) != 0);
+	}
+
+	[[nodiscard]] bool isV9968_Old() const {
+		return (version & VM_V9968_OLD) != 0;
+	}
+
+	[[nodiscard]] bool isV9968_New() const {
+		return (version & VM_V9968_NEW) != 0;
 	}
 
 	/** Is this an MSX1 VDP?
@@ -242,11 +250,11 @@ public:
 	}
 
 	[[nodiscard]] bool hasECOM() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
 	}
 
 	[[nodiscard]] bool hasEVR() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
 	}
 
 	[[nodiscard]] bool hasS16() const {
@@ -266,7 +274,11 @@ public:
 	}
 
 	[[nodiscard]] bool hasFID() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
+	}
+
+	[[nodiscard]] bool hasV58() const {
+		return (version & VM_V9968_NEW) != 0;
 	}
 
 	/** Get the (fixed) palette for this MSX1 VDP.
@@ -908,7 +920,9 @@ private:
 	static constexpr unsigned VM_TOSHIBA_PALETTE  =  32; // set-> has Toshiba palette
 	static constexpr unsigned VM_YJK              =  64; // set-> has YJK (MSX2+)
 	static constexpr unsigned VM_YM2220_PALETTE   = 128; // set-> has YM2220 palette
-	static constexpr unsigned VM_V9968            = 256; // set-> has YJK (MSX2+)
+	static constexpr unsigned VM_V9968_OLD        = 256; 
+	static constexpr unsigned VM_V9968_NEW        = 512; 
+	static constexpr unsigned VM_V9968            = (512 | 256);
 
 	/** VDP version: the VDP model being emulated. */
 	enum VdpVersion : uint16_t {
@@ -952,7 +966,10 @@ private:
 		V9958      = VM_YJK,
 
 		/** MSX2+ and turbo R VDP. */
-		V9968      = VM_YJK | VM_V9968,
+		V9968_OLD  = VM_YJK | VM_V9968_OLD,
+
+		/** MSX2+ and turbo R VDP. */
+		V9968_NEW  = VM_YJK | VM_V9968_NEW,
 	};
 
 	struct SyncBase : public Schedulable {

@@ -145,7 +145,9 @@ VDP::VDP(const DeviceConfig& config)
 	else if (versionString == "TMS9129") version = TMS9129;
 	else if (versionString == "V9938") version = V9938;
 	else if (versionString == "V9958") version = V9958;
-	else if (versionString == "V9968") version = V9968;
+	else if (versionString == "V9968") version = V9968_NEW;
+	else if (versionString == "V9968_OLD") version = V9968_OLD;
+	else if (versionString == "V9968_NEW") version = V9968_NEW;
 	else if (versionString == "YM2220PAL") version = YM2220PAL;
 	else if (versionString == "YM2220NTSC") version = YM2220NTSC;
 	else throw MSXException("Unknown VDP version \"", versionString, '"');
@@ -180,7 +182,7 @@ VDP::VDP(const DeviceConfig& config)
 	};
 	controlRegMask = isMSX1VDP() ? 0x07 : 0x3F;
 	controlValueMasks = isMSX1VDP() ? VALUE_MASKS_MSX1 : VALUE_MASKS_MSX2;
-	if (version == V9958 || version == V9968) {
+	if (version == V9958 || version == V9968_OLD || version == V9968_NEW) {
 		// Enable V9958-specific control registers.
 		controlValueMasks[25] = 0x7F;
 		controlValueMasks[26] = 0x3F;
@@ -222,6 +224,9 @@ VDP::VDP(const DeviceConfig& config)
 		controlValueMasks[25] |= 0x80;
 	}
 	if (hasFID()) {
+		controlValueMasks[21] |= 0x01;
+	}
+	if (hasV58()) {
 		controlValueMasks[21] |= 0x01;
 	}
 
@@ -340,7 +345,8 @@ void VDP::resetInit()
 			statusReg1 = 0x00 << 1;
 			break;
 		case V9958:
-		case V9968:
+		case V9968_OLD:
+		case V9968_NEW:
 			statusReg1 = 0x02 << 1;
 			break;
 	}
