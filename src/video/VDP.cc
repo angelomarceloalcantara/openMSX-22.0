@@ -522,6 +522,7 @@ void VDP::execSetMode(EmuTime time)
 	updateDisplayMode(
 		DisplayMode(controlRegs[0], controlRegs[1], controlRegs[25]),
 		getCmdBit(),
+		isSP3(),
 		time);
 }
 
@@ -996,7 +997,7 @@ void VDP::scheduleCpuVramAccess(bool isRead, uint8_t write, EmuTime time)
 void VDP::executeCpuVramAccess(EmuTime time)
 {
 	int addr = (controlRegs[14] << 14) | vramPointer;
-	if (displayMode.isPlanar()) {
+	if (isPlanar()) {
 		// note: also extended VRAM is interleaved,
 		//       because there is only 64kB it's interleaved
 		//       with itself (every byte repeated twice)
@@ -1264,7 +1265,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		// old code does not hurt.
 		// Eventually this line should be re-enabled.
 		/*
-		if (displayMode.isPlanar()) {
+		if (isPlanar()) {
 			base = ((base << 16) | (base >> 1)) & 0x1FFFF;
 		}
 		*/
@@ -1314,6 +1315,12 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		}
 		break;
 	case 20:
+		if (hasSP3() && (change & 0x08)) {
+			updateDisplayMode(getDisplayMode(),
+							  getCmdBit(),
+							  (val & 0x08) != 0,
+							  time);
+		}
 		if (   (hasSP3()  && (change & 0x08))
 			|| (hasEPAL() && (change & 0x10))
 			|| (hasILNS() && (change & 0x04))
@@ -1342,6 +1349,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		if (change & (DisplayMode::REG25_MASK | 0x40)) {
 			updateDisplayMode(getDisplayMode().updateReg25(val),
 			                  val & 0x40,
+							  isSP3(),
 			                  time);
 		}
 		if (change & 0x08) {
@@ -1474,7 +1482,7 @@ void VDP::updateNameBase(EmuTime time)
 	// old code does not hurt.
 	// Eventually this line should be re-enabled.
 	/*
-	if (displayMode.isPlanar()) {
+	if (isPlanar()) {
 		base = ((base << 16) | (base >> 1)) & 0x1FFFF;
 	}
 	*/
@@ -1577,7 +1585,7 @@ void VDP::updateSpriteAttributeBase(EmuTime time)
 		indexMask = ~0u << 9;
 		break;
 	}
-	if (displayMode.isPlanar()) {
+	if (isPlanar()) {
 		baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
 		indexMask = ((indexMask << 16) |  ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 	}
@@ -1591,7 +1599,7 @@ void VDP::updateSpritePatternBase(EmuTime time)
 	case 2: {
 		unsigned baseMask = (controlRegs[6] << 11) | ~(~0u << 11);
 		unsigned indexMask = ~0u << 11;
-		if (displayMode.isPlanar()) {
+		if (isPlanar()) {
 			baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
 			indexMask = ((indexMask << 16) | ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 		}
@@ -1607,22 +1615,21 @@ void VDP::updateSpritePatternBase(EmuTime time)
 	}
 }
 
-void VDP::updateDisplayMode(DisplayMode newMode, bool cmdBit, EmuTime time)
+void VDP::updateDisplayMode(DisplayMode newMode, bool cmdBit, bool sp3Bit, EmuTime time)
 {
 	// Synchronize subsystems.
-	vram->updateDisplayMode(newMode, cmdBit, time);
+	vram->updateDisplayMode(newMode, cmdBit, sp3Bit, time);
 
 	// TODO: Is this a useful optimisation, or doesn't it help
 	//       in practice?
 	// What aspects have changed:
 	// Switched from planar to non-planar or vice versa.
 	bool planarChange =
-		newMode.isPlanar() != displayMode.isPlanar();
+		isPlanar(newMode, sp3Bit) != isPlanar(displayMode, isSP3());
 	// Sprite mode changed.
 	bool msx1 = isMSX1VDP();
-	bool sp3 = isSP3();
 	bool spriteModeChange =
-		newMode.getSpriteMode(msx1, sp3) != displayMode.getSpriteMode(msx1, sp3);
+		newMode.getSpriteMode(msx1, sp3Bit) != displayMode.getSpriteMode(msx1, sp3Bit);
 
 	// Commit the new display mode.
 	displayMode = newMode;

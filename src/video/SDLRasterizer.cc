@@ -84,14 +84,18 @@ static constexpr int translateX(int absoluteX, bool narrow)
 
 inline void SDLRasterizer::renderBitmapLine(std::span<Pixel> buf, unsigned vramLine)
 {
-	if (vdp.getDisplayMode().isPlanar()) {
+	if (!vdp.getDisplayMode().isPlanar()) {
+		auto vramPtr =
+			vram.bitmapCacheWindow.getReadArea<128>(vramLine * 128);
+		bitmapConverter.convertLine(buf, vramPtr);
+	} else if (vdp.isPlanar()) {
 		auto [vramPtr0, vramPtr1] =
 			vram.bitmapCacheWindow.getReadAreaPlanar<256>(vramLine * 256);
 		bitmapConverter.convertLinePlanar(buf, vramPtr0, vramPtr1);
 	} else {
 		auto vramPtr =
-			vram.bitmapCacheWindow.getReadArea<128>(vramLine * 128);
-		bitmapConverter.convertLine(buf, vramPtr);
+			vram.bitmapCacheWindow.getReadArea<256>(vramLine * 256);
+		bitmapConverter.convertLineNonPlanar(buf, vramPtr);
 	}
 }
 
@@ -612,7 +616,7 @@ void SDLRasterizer::drawDisplay(
 			//   needed when vdp.isFastBlinkEnabled() is true.
 			//   Idea: can be cheaply calculated incrementally.
 			bool filMode = vdp.isFIL();
-			unsigned pageMaskOdd = (mode.isPlanar() ? 0x000 : 0x200) |
+			unsigned pageMaskOdd = (vdp.isPlanar() ? 0x000 : 0x200) |
 				(filMode ? (vdp.getEvenOdd() ? 0x100 : 0x000) : vdp.getEvenOddMask(y));
 			unsigned pageMaskEven = vdp.isMultiPageScrolling()
 				? (pageMaskOdd & ~0x100)

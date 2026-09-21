@@ -124,7 +124,7 @@ public:
 	  * @param mode The new display mode.
 	  * @param time The moment in emulated time this change occurs.
 	  */
-	void updateDisplayMode(DisplayMode mode, EmuTime time) {
+	void updateDisplayMode(DisplayMode mode, bool /*sp3Bit*/, EmuTime time) {
 		sync(time);
 		setDisplayMode(mode);
 

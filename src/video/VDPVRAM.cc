@@ -47,7 +47,7 @@ VDPVRAM::LogicalVRAMDebuggable::LogicalVRAMDebuggable(const VDP& vdp_)
 unsigned VDPVRAM::LogicalVRAMDebuggable::transform(unsigned address)
 {
 	const auto& vram = OUTER(VDPVRAM, logicalVRAMDebug);
-	if (!vram.vdp.getDisplayMode().isPlanar()) {
+	if (!vram.vdp.isPlanar()) {
 		return address;
 	} else if (vram.vdp.hasEVR()) {
 		return ((address & 0x20000) | ((address << 16) & 0x10000) | ((address >> 1) & 0x0FFFF)) & 0x3FFFF;
@@ -146,12 +146,12 @@ void VDPVRAM::clear()
 	}
 }
 
-void VDPVRAM::updateDisplayMode(DisplayMode mode, bool cmdBit, EmuTime time)
+void VDPVRAM::updateDisplayMode(DisplayMode mode, bool cmdBit, bool sp3Bit, EmuTime time)
 {
 	assert(vdp.isInsideFrame(time));
 	cmdEngine->updateDisplayMode(mode, cmdBit, time);
 	renderer->updateDisplayMode(mode, time);
-	spriteChecker->updateDisplayMode(mode, time);
+	spriteChecker->updateDisplayMode(mode, sp3Bit, time);
 }
 
 void VDPVRAM::updateDisplayEnabled(bool enabled, EmuTime time)

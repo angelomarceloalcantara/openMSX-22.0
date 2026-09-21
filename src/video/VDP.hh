@@ -201,6 +201,14 @@ public:
 		return (version & VM_PAL) != 0;
 	}
 
+	[[nodiscard]] constexpr bool isPlanar(DisplayMode mode, bool sp3Bit) const {
+		return mode.isPlanar() & !sp3Bit;
+	}
+
+	[[nodiscard]] constexpr bool isPlanar() const {
+		return isPlanar(displayMode, isSP3());
+	}
+
 	/** Is this a VDP that lacks mirroring?
 	  * @return True iff this VDP lacks the screen 2 mirrored mode
 	  */
@@ -1198,7 +1206,7 @@ private:
 	/** Display mode has changed.
 	  * Update displayMode's value and inform the Renderer.
 	  */
-	void updateDisplayMode(DisplayMode newMode, bool cmdBit, EmuTime time);
+	void updateDisplayMode(DisplayMode newMode, bool cmdBit, bool sp3Bit, EmuTime time);
 
 	/** EVR has changed.
 	  */
