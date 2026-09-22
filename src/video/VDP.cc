@@ -345,9 +345,12 @@ void VDP::resetInit()
 			statusReg1 = 0x00 << 1;
 			break;
 		case V9958:
+			statusReg1 = 0x02 << 1;
+			break;
 		case V9968_OLD:
 		case V9968_NEW:
-			statusReg1 = 0x02 << 1;
+			statusReg1 = 0;
+			updateChipVersion((controlRegs[21] & 0x01) == 0x00);
 			break;
 	}
 	statusReg2 = 0x0C;
@@ -1328,8 +1331,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 			syncAtNextLine(syncSetMode, time);
 		}
 		if (hasEVR() && (change & 0x40)) {
-			updateAddressMask((val & 0x40) != 0);
-			vram->updateEVRMode((val & 0x40) != 0, time);
+			updateEVRMode((val & 0x40) != 0, time);
 		}
 		if (hasS16()  && (change & 0x80)) {
 			syncAtNextLine(syncSetSprites, time);
@@ -1337,8 +1339,13 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		break;
 	case 21:
 		if (hasFID() && (change & 0x01)) {
-			statusReg1 &= ~(0x1F << 1);
-			statusReg1 |= (val & 0x01) ? (0x02 << 1) : (0x03 << 1);
+			bool v9968 = (val & 0x01) == 0;
+			updateChipVersion(v9968);
+		}
+		if (hasV58() && (change & 0x01)) {
+			bool v9968 = (val & 0x01) == 0;
+			updateChipVersion(v9968);
+			updateEVRMode(v9968, time);
 		}
 		break;
 	case 23:
@@ -1662,6 +1669,11 @@ void VDP::updateAddressMask(bool evr)
 	controlValueMasks[10] = evr ? 0x0F : 0x0F;
 	controlValueMasks[11] = evr ? 0x07 : 0x07;
 	controlValueMasks[14] = evr ? 0x0F : 0x07;
+}
+
+void VDP::updateEVRMode(bool evr, EmuTime time) {
+	updateAddressMask(evr);
+	vram->updateEVRMode(evr, time);
 }
 
 void VDP::update(const Setting& setting) noexcept

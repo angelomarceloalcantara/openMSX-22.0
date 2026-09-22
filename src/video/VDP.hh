@@ -1215,6 +1215,17 @@ private:
 	// Observer<Setting>
 	void update(const Setting& setting) noexcept override;
 
+	/** update chip version value
+	  */
+	void updateChipVersion(bool v9968) {
+		statusReg1 &= ~(0x1F << 1);
+		statusReg1 |= v9968 ? (0x03 << 1) : (0x02 << 1);
+	}
+
+	/** update EVR
+	  */
+	void updateEVRMode(bool evr, EmuTime time);
+
 private:
 	Display& display;
 	EnumSetting<bool>& cmdTiming;
