@@ -186,6 +186,14 @@ public:
 		return (version & VM_V9968_NEW) != 0;
 	}
 
+	[[nodiscard]] bool canEVR() const {
+		return hasEVR() || hasV58();
+	}
+
+	[[nodiscard]] bool canECOM() const {
+		return hasECOM() || hasV58();
+	}
+
 	/** Is this an MSX1 VDP?
 	  * @return True if this is an MSX1 VDP
 	  *   False otherwise.

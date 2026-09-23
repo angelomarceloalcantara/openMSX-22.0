@@ -208,7 +208,6 @@ VDP::VDP(const DeviceConfig& config)
 		controlValueMasks[20] |= 0x20;
 	}
 	if (hasEVR()) {
-		updateAddressMask(false);
 		controlValueMasks[20] |= 0x40;
 	}
 	if (hasS16()) {
@@ -230,12 +229,16 @@ VDP::VDP(const DeviceConfig& config)
 		controlValueMasks[21] |= 0x01;
 	}
 
+	if (canEVR()) {
+		updateAddressMask(false);
+	}
+
 	resetInit(); // must be done early to avoid UMRs
 
 	// Video RAM.
 	EmuTime time = getCurrentTime();
 	unsigned vramSize;
-	if (hasEVR()) {
+	if (canEVR()) {
 		vramSize = 256;
 	} else {
 		vramSize = (isMSX1VDP() ? 16 : config.getChildDataAsInt("vram", 0));
@@ -1004,7 +1007,7 @@ void VDP::executeCpuVramAccess(EmuTime time)
 		// note: also extended VRAM is interleaved,
 		//       because there is only 64kB it's interleaved
 		//       with itself (every byte repeated twice)
-		if (hasEVR()) {
+		if (canEVR()) {
 			addr = ((addr & 0x20000) | ((addr << 16) & 0x10000) | ((addr >> 1) & 0x0FFFF)) & 0x3FFFF;
 		} else {
 			addr = ((addr << 16) | (addr >> 1)) & 0x1FFFF;
@@ -1014,7 +1017,7 @@ void VDP::executeCpuVramAccess(EmuTime time)
 	bool doAccess = [&] {
 		if (!cpuExtendedVram) [[likely]] {
 			return true;
-		} else if (hasEVR()) {
+		} else if (canEVR()) {
 			return false;
 		} else if (vram->getSize() == 192 * 1024) [[likely]] {
 			addr = 0x20000 | (addr & 0xFFFF);
@@ -1200,10 +1203,10 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		// MXC belongs to CPU interface;
 		// other bits in this register belong to command engine.
 		if (reg == 45) {
-			cpuExtendedVram = ((val & 0x40) != 0) && !hasEVR() && !isECOM();
+			cpuExtendedVram = ((val & 0x40) != 0) && !canEVR() && !isECOM();
 		}
 		// Pass command register writes to command engine.
-		if (reg < (hasECOM() ? 59 : 47)) {
+		if (reg < (canECOM() ? 59 : 47)) {
 			cmdEngine->setCmdReg(reg - 32, val, time);
 		}
 		return;
@@ -1593,7 +1596,7 @@ void VDP::updateSpriteAttributeBase(EmuTime time)
 		break;
 	}
 	if (isPlanar()) {
-		baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
+		baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (canEVR() ? 0x3FFFF : 0x1FFFF);
 		indexMask = ((indexMask << 16) |  ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 	}
 	vram->spriteAttribTable.setMask(baseMask, indexMask, time);
@@ -1607,7 +1610,7 @@ void VDP::updateSpritePatternBase(EmuTime time)
 		unsigned baseMask = (controlRegs[6] << 11) | ~(~0u << 11);
 		unsigned indexMask = ~0u << 11;
 		if (isPlanar()) {
-			baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
+			baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (canEVR() ? 0x3FFFF : 0x1FFFF);
 			indexMask = ((indexMask << 16) | ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 		}
 		vram->spritePatternTable.setMask(baseMask, indexMask, time);
