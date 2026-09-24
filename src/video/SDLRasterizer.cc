@@ -616,8 +616,14 @@ void SDLRasterizer::drawDisplay(
 			//   needed when vdp.isFastBlinkEnabled() is true.
 			//   Idea: can be cheaply calculated incrementally.
 			bool filMode = vdp.isFIL();
-			unsigned pageMaskOdd = (vdp.isPlanar() ? 0x000 : 0x200) |
-				(filMode ? (vdp.getEvenOdd() ? 0x100 : 0x000) : vdp.getEvenOddMask(y));
+			unsigned pageMaskOdd = filMode ? (vdp.getEvenOdd() ? 0x100 : 0x000) : vdp.getEvenOddMask(y);
+			if (vdp.isEVR()) {
+				pageMaskOdd |= vdp.getDisplayMode().isPlanar() ? ((3 << 8) & ~0x100)	// page0~3 : screen7,8,10,11,12
+															   : ((7 << 8) & ~0x100);	// page0~7 : screen5,6
+			} else {
+				pageMaskOdd |= vdp.getDisplayMode().isPlanar() ? ((1 << 8) & ~0x100)	// page0~1 : screen7,8,10,11,12
+															   : ((3 << 8) & ~0x100);	// page0~3 : screen5,6
+			}
 			unsigned pageMaskEven = vdp.isMultiPageScrolling()
 				? (pageMaskOdd & ~0x100)
 				: pageMaskOdd;
