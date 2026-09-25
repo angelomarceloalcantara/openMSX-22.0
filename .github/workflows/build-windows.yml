@@ -1,0 +1,66 @@
+name: Build openMSX for Windows
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-tcl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-libtheora
+            mingw-w64-x86_64-speex
+
+      - name: Build openMSX
+        shell: msys2 {0}
+        run: |
+          python3 build/detect.py
+          mingw32-make -j$(nproc)
+
+      - name: Organize output bundle
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist
+          # Localiza e copia o executável gerado
+          EXE_PATH=$(find derived -name "openmsx.exe")
+          cp "$EXE_PATH" dist/
+          
+          # Copia as DLLs necessárias da instalação do MinGW64
+          cp /mingw64/bin/*.dll dist/ 2>/dev/null || true
+          
+          # Copia pastas de recursos do openMSX se existirem
+          if [ -d "share" ]; then cp -r share dist/; fi
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmsx-windows-x64
+          path: dist/
