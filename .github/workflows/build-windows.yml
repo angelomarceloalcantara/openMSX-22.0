@@ -42,6 +42,7 @@ jobs:
       - name: Build openMSX
         shell: msys2 {0}
         run: |
+          export MAKE=mingw32-make
           ./configure
           mingw32-make -j$(nproc)
 
