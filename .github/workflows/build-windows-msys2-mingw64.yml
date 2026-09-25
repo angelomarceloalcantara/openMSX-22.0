@@ -62,19 +62,32 @@ jobs:
             mingw-w64-x86_64-libtheora
             mingw-w64-x86_64-freetype
 
-      - name: Corrigir bug conhecido do meson.build (CommandConsole.cc removido)
+      - name: Remover referências a arquivos inexistentes em src/meson.build
         run: |
-          # src/console/CommandConsole.cc foi substituído por
-          # src/imgui/ImGuiConsole.cc, mas src/meson.build ainda lista o
-          # arquivo antigo como fonte. Isso quebra o build via Meson em
-          # qualquer plataforma (bug upstream, confirmado até na tag
-          # RELEASE_21_0). Removemos a linha órfã antes de configurar.
-          if grep -q "console/CommandConsole.cc" src/meson.build; then
-            sed -i "/console\/CommandConsole\.cc/d" src/meson.build
-            echo "Linha órfã de CommandConsole.cc removida de src/meson.build."
-          else
-            echo "Nenhuma referência a CommandConsole.cc encontrada — nada a corrigir."
-          fi
+          # O src/meson.build desse projeto (upstream e fork) acumula
+          # referências a arquivos .cc/.hh que já foram removidos/renomeados
+          # do código-fonte (ex: console/CommandConsole.cc -> imgui/ImGuiConsole.cc,
+          # console/OSDConsoleRenderer.cc, etc). Isso quebra "meson setup" com
+          # "ERROR: File X does not exist" para cada um, um de cada vez.
+          #
+          # Em vez de corrigir manualmente arquivo por arquivo, varremos TODAS
+          # as linhas de src/meson.build que citam um caminho entre aspas
+          # terminado em .cc/.hh/.cpp/.h, checamos se o arquivo existe de fato
+          # em disco (relativo a src/) e removemos as linhas cujo arquivo não
+          # existe.
+          cd src
+          removed=0
+          while IFS= read -r rel; do
+            if [[ ! -f "$rel" ]]; then
+              echo "Removendo referência a arquivo inexistente: $rel"
+              # escapa caracteres especiais de regex/sed no caminho
+              esc=$(printf '%s' "$rel" | sed -e 's/[.[\*^$/]/\\&/g')
+              sed -i "\#${esc}#d" meson.build
+              removed=$((removed + 1))
+            fi
+          done < <(grep -oE "'[A-Za-z0-9_./-]+\.(cc|hh|cpp|h)'" meson.build | tr -d "'" | sort -u)
+          echo "Total de linhas órfãs removidas: $removed"
+          cd ..
 
       - name: Configurar build (Meson)
         run: meson setup build --buildtype=release
