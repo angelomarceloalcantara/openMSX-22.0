@@ -62,6 +62,20 @@ jobs:
             mingw-w64-x86_64-libtheora
             mingw-w64-x86_64-freetype
 
+      - name: Corrigir bug conhecido do meson.build (CommandConsole.cc removido)
+        run: |
+          # src/console/CommandConsole.cc foi substituído por
+          # src/imgui/ImGuiConsole.cc, mas src/meson.build ainda lista o
+          # arquivo antigo como fonte. Isso quebra o build via Meson em
+          # qualquer plataforma (bug upstream, confirmado até na tag
+          # RELEASE_21_0). Removemos a linha órfã antes de configurar.
+          if grep -q "console/CommandConsole.cc" src/meson.build; then
+            sed -i "/console\/CommandConsole\.cc/d" src/meson.build
+            echo "Linha órfã de CommandConsole.cc removida de src/meson.build."
+          else
+            echo "Nenhuma referência a CommandConsole.cc encontrada — nada a corrigir."
+          fi
+
       - name: Configurar build (Meson)
         run: meson setup build --buildtype=release
 
