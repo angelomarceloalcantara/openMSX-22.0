@@ -1,4 +1,4 @@
-name: Build openMSX (Windows MINGW64)
+name: Build openMSX (Windows MinGW64)
 
 on:
   push:
@@ -7,15 +7,15 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Configuração do MSYS2 com todas as dependências do MINGW64
-      - name: Configurar MSYS2 e Instalar Dependências
+      # Configura o MSYS2 no ambiente MINGW64
+      - name: Configurar MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -34,20 +34,21 @@ jobs:
             mingw-w64-x86_64-libogg
             mingw-w64-x86_64-libvorbis
             mingw-w64-x86_64-libtheora
-            mingw-w64-x86_64-speex
             mingw-w64-x86_64-flac
             python3
 
-      # Execução da compilação dentro do ambiente MSYS2
+      # Executa a compilação
       - name: Compilar openMSX
         shell: msys2 {0}
         run: |
           set -e
+          
+          # Garante a atualização e verificação de pacotes MinGW64
           export MAKE=mingw32-make
           export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:$PKG_CONFIG_PATH"
           
-          # Rodar a configuração
+          # Executa a checagem de dependências
           ./configure
           
-          # Compilar utilizando os núcleos disponíveis
+          # Compila o projeto utilizando todos os núcleos do processador
           mingw32-make -j$(nproc)
