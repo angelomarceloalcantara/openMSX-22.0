@@ -1,19 +1,13 @@
 # ============================================================================
 # .github/workflows/build-windows-test-upstream.yml
 #
-# TESTE DE DIAGNÓSTICO (v2): compila a tag ESTÁVEL RELEASE_21_0 do
-# repositório oficial openMSX/openMSX, em vez da branch master.
+# TESTE DE DIAGNÓSTICO (v3): compila a tag RELEASE_21_0 do openMSX oficial,
+# mas agora com um passo extra ANTES do Meson que lista o conteúdo real de
+# src/meson.build (primeiras linhas) e de src/console/ no disco do runner.
 #
-# Por quê: testamos o master oficial e ele FALHOU com o mesmo erro do fork
-# (console/CommandConsole.cc não existe). Isso indica que o master está,
-# neste momento, num estado de transição/instável (o console antigo Tcl
-# está sendo substituído por um novo console baseado em ImGui, e o
-# src/meson.build aparentemente ainda não foi atualizado para refletir
-# isso). Uma release taggeada não deveria sofrer desse problema.
-#
-# Se ESTE workflow compilar com sucesso: confirma que o pipeline
-# MSYS2/Meson está correto, e que o problema é branch/commit específico
-# (master instável), não do seu fork nem do workflow.
+# Isso elimina qualquer suposição: vamos ver com os próprios olhos se
+# console/CommandConsole.cc existe ou não na árvore checked-out, e o que
+# src/meson.build realmente contém na linha 1.
 # ============================================================================
 
 name: TESTE - Build Windows (openMSX RELEASE_21_0)
@@ -36,6 +30,29 @@ jobs:
           repository: openMSX/openMSX
           ref: RELEASE_21_0
           fetch-depth: 0
+
+      - name: DIAGNÓSTICO - inspecionar src/meson.build e src/console
+        run: |
+          echo "===== git status ====="
+          git status
+          echo ""
+          echo "===== git log -1 ====="
+          git log -1
+          echo ""
+          echo "===== primeiras 10 linhas de src/meson.build ====="
+          head -n 10 src/meson.build
+          echo ""
+          echo "===== conteúdo de src/console/ (se existir) ====="
+          ls -la src/console/ 2>&1 || echo "PASTA src/console NAO EXISTE"
+          echo ""
+          echo "===== procurando CommandConsole em todo o repo ====="
+          find . -iname "*CommandConsole*" 2>&1
+          echo ""
+          echo "===== procurando ImGuiConsole em todo o repo ====="
+          find . -iname "*ImGuiConsole*" 2>&1
+          echo ""
+          echo "===== quantas vezes 'CommandConsole' aparece em src/meson.build ====="
+          grep -n "CommandConsole" src/meson.build || echo "não aparece"
 
       - name: Configurar MSYS2 + MinGW64 e instalar dependências
         uses: msys2/setup-msys2@v2
