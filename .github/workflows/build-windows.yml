@@ -1,4 +1,4 @@
-name: Build openMSX for Windows
+name: Build openMSX
 
 on:
   push:
@@ -10,7 +10,6 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,25 +19,25 @@ jobs:
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
-        msystem: MINGW64
-        update: true
-        install: >-
-          git
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-make
-          mingw-w64-x86_64-pkg-config
-          mingw-w64-x86_64-python
-          mingw-w64-x86_64-tcl
-          mingw-w64-x86_64-zlib
-          mingw-w64-x86_64-libpng
-          mingw-w64-x86_64-glew
-          mingw-w64-x86_64-SDL2
-          mingw-w64-x86_64-SDL2_ttf
-          mingw-w64-x86_64-libogg
-          mingw-w64-x86_64-libvorbis
-          mingw-w64-x86_64-libtheora
-          mingw-w64-x86_64-speex
-          mingw-w64-x86_64-flac
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-tcl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-libtheora
+            mingw-w64-x86_64-speex
+            mingw-w64-x86_64-flac
 
       - name: Build openMSX
         shell: msys2 {0}
