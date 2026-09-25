@@ -39,9 +39,10 @@ static_vector<Rect, 2> rectFromVdpCmd(
 	const auto [width, height, pixelsPerByte] = [&] {
 		switch (screenMode) {
 		using enum ImGuiBitmapViewer::ScrnMode;
-		case SCR5: return std::tuple{256, 1024 * 2, 2};
-		case SCR6: return std::tuple{512, 1024 * 2, 4};
-		case SCR7: return std::tuple{512,  512 * 2, 2};
+		case SCR5:   return std::tuple{256, 1024 * 2, 2};
+		case SCR6:   return std::tuple{512, 1024 * 2, 4};
+		case SCR7:   return std::tuple{512,  512 * 2, 2};
+		case SCR7NP: return std::tuple{512,  512 * 2, 2};
 		default:   return std::tuple{256,  512 * 2, 1}; // screen 8, 11, 12  (and fallback for non-bitmap)
 		}
 	}();
@@ -189,23 +190,23 @@ void ImGuiBitmapViewer::paint(MSXMotherBoard* motherBoard)
 		auto* vdp = dynamic_cast<VDP*>(motherBoard->findDevice("VDP")); // TODO name based OK?
 		if (!vdp || vdp->isMSX1VDP()) return;
 
-		auto parseMode = [](DisplayMode mode) {
+		auto parseMode = [](DisplayMode mode, bool planar) {
 			auto base = mode.getBase();
 			if (base == DisplayMode::GRAPHIC4) return SCR5;
 			if (base == DisplayMode::GRAPHIC5) return SCR6;
-			if (base == DisplayMode::GRAPHIC6) return SCR7;
+			if (base == DisplayMode::GRAPHIC6) return planar ? SCR7 : SCR7NP;
 			if (base != DisplayMode::GRAPHIC7) return OTHER;
 			if (mode.getByte() & DisplayMode::YJK) {
 				if (mode.getByte() & DisplayMode::YAE) {
-					return SCR11;
+					return planar ? SCR11 : SCR11NP;
 				} else {
-					return SCR12;
+					return planar ? SCR12 : SCR12NP;
 				}
 			} else {
-				return SCR8;
+				return planar ? SCR8 : SCR8NP;
 			}
 		};
-		int vdpMode = parseMode(vdp->getDisplayMode());
+		int vdpMode = parseMode(vdp->getDisplayMode(), vdp->isPlanar());
 
 		int vdpPages = vdpMode <= SCR6 ? 4 : 2;
 		if (vdp->isEVR()) vdpPages *= 2;
@@ -215,20 +216,20 @@ void ImGuiBitmapViewer::paint(MSXMotherBoard* motherBoard)
 		int vdpLines = (vdp->getNumberOfLines() == 192) ? 0 : 1;
 
 		int vdpColor0 = [&]{
-			if (vdpMode == one_of(SCR8, SCR11, SCR12) || !vdp->getTransparency()) {
+			if (vdpMode == one_of(SCR8, SCR8NP, SCR11, SCR11NP, SCR12, SCR12NP) || !vdp->getTransparency()) {
 				return 16; // no replacement
 			}
 			return vdp->getBackgroundColor() & 15;
 		}();
 
 		auto modeToStr = [](int mode) {
-			if (mode == SCR5 ) return "screen 5";
-			if (mode == SCR6 ) return "screen 6";
-			if (mode == SCR7 ) return "screen 7";
-			if (mode == SCR8 ) return "screen 8";
-			if (mode == SCR11) return "screen 11";
-			if (mode == SCR12) return "screen 12";
-			if (mode == OTHER) return "non-bitmap";
+			if (mode == SCR5                    ) return "screen 5";
+			if (mode == SCR6                    ) return "screen 6";
+			if (mode == SCR7  || mode == SCR7NP ) return "screen 7";
+			if (mode == SCR8  || mode == SCR8NP ) return "screen 8";
+			if (mode == SCR11 || mode == SCR11NP) return "screen 11";
+			if (mode == SCR12 || mode == SCR12NP) return "screen 12";
+			if (mode == OTHER                   ) return "non-bitmap";
 			assert(false); return "ERROR";
 		};
 
@@ -307,7 +308,7 @@ void ImGuiBitmapViewer::paint(MSXMotherBoard* motherBoard)
 		int page   = manualPage   ? bitmapPage     : vdpPage;
 		int lines  = manualLines  ? bitmapLines    : vdpLines;
 		int color0 = manualColor0 ? bitmapColor0   : vdpColor0;
-		int divX = mode == one_of(SCR6, SCR7) ? 1 : 2;
+		int divX = mode == one_of(SCR6, SCR7, SCR7NP) ? 1 : 2;
 		int width  = 512 / divX;
 		int height = (lines == 0) ? 192
 		           : (lines == 1) ? 212
@@ -658,18 +659,21 @@ void ImGuiBitmapViewer::paint(MSXMotherBoard* motherBoard)
 
 				unsigned physAddr = 0x8000 * page + 128 * y;
 				switch (mode) {
-				case SCR5: physAddr += x / 2; break;
-				case SCR6: physAddr += x / 4; break;
-				case SCR7: physAddr += x / 4 + 0x08000 * (x & 2); break;
-				case SCR8: case SCR11: case SCR12:
+				case SCR5:   physAddr += x / 2; break;
+				case SCR6:   physAddr += x / 4; break;
+				case SCR7:   physAddr += x / 4 + 0x08000 * (x & 2); break;
+				case SCR7NP: physAddr += x / 2; break;
+				case SCR8:   case SCR11:   case SCR12:
 						physAddr += x / 2 + 0x10000 * (x & 1); break;
+				case SCR8NP: case SCR11NP: case SCR12NP:
+						physAddr += x; break;
 				default: assert(false);
 				}
 
 				auto value = vram.getData()[physAddr];
 				auto color = [&] -> uint8_t {
 					switch (mode) {
-					case SCR5: case SCR7:
+					case SCR5: case SCR7: case SCR7NP:
 						return (value >> (4 * (1 - (x & 1)))) & 0x0f;
 					case SCR6:
 						return (value >> (2 * (3 - (x & 3)))) & 0x03;
@@ -677,14 +681,14 @@ void ImGuiBitmapViewer::paint(MSXMotherBoard* motherBoard)
 						return value;
 					}
 				}();
-				if (mode != one_of(SCR11, SCR12)) {
+				if (mode != one_of(SCR11, SCR11NP, SCR12, SCR12NP)) {
 					ImGui::SameLine();
 					ImGui::TextUnformatted("  color="sv); dec3(color);
 				}
 
 				ImGui::SameLine();
 				ImGui::TextUnformatted("  vram: addr=0x");
-				if (mode == one_of(SCR5, SCR6)) {
+				if (mode == one_of(SCR5, SCR6, SCR7NP, SCR8NP, SCR11NP, SCR12NP)) {
 					hex5(physAddr);
 				} else {
 					unsigned logAddr = (physAddr & 0x0ffff) << 1 | (physAddr >> 16);
@@ -761,6 +765,18 @@ void ImGuiBitmapViewer::renderBitmap(std::span<const uint8_t> vram, std::span<co
 		}
 		break;
 
+	case SCR7NP:
+		for (auto y : xrange(lines)) {
+			auto* line = &output[512 * y];
+			for (auto x : xrange(256)) {
+				auto value0 = vram[addr];
+				line[2 * x + 0] = palette16[(value0 >> 4) & 0x0f];
+				line[2 * x + 1] = palette16[(value0 >> 0) & 0x0f];
+				++addr;
+			}
+		}
+		break;
+
 	case SCR8: {
 		if (isEPAL) {
 			for (auto y : xrange(lines)) {
@@ -787,6 +803,37 @@ void ImGuiBitmapViewer::renderBitmap(std::span<const uint8_t> vram, std::span<co
 				for (auto x : xrange(128)) {
 					line[2 * x + 0] = toColor(vram[addr + 0x00000]);
 					line[2 * x + 1] = toColor(vram[addr + 0x10000]);
+					++addr;
+				}
+			}
+		}
+		break;
+	}
+
+	case SCR8NP: {
+		if (isEPAL) {
+			for (auto y : xrange(lines)) {
+				auto* line = &output[256 * y];
+				for (auto x : xrange(256)) {
+					line[x] = palette16[vram[addr]];
+					++addr;
+				}
+			}
+		} else {
+			auto toColor = [](uint8_t value) {
+				int r = (value & 0x1c) >> 2;
+				int g = (value & 0xe0) >> 5;
+				int b = (value & 0x03) >> 0;
+				int rr = (r << 5) | (r << 2) | (r >> 1);
+				int gg = (g << 5) | (g << 2) | (g >> 1);
+				int bb = (b << 6) | (b << 4) | (b << 2) | (b << 0);
+				int aa = 255;
+				return (rr << 0) | (gg << 8) | (bb << 16) | (aa << 24);
+			};
+			for (auto y : xrange(lines)) {
+				auto* line = &output[256 * y];
+				for (auto x : xrange(256)) {
+					line[x] = toColor(vram[addr]);
 					++addr;
 				}
 			}
@@ -826,6 +873,38 @@ void ImGuiBitmapViewer::renderBitmap(std::span<const uint8_t> vram, std::span<co
 		}
 		break;
 
+	case SCR11NP:
+		for (auto y : xrange(lines)) {
+			auto* line = &output[256 * y];
+			for (auto x : xrange(64)) {
+				std::array<unsigned, 4> p = {
+					vram[addr + 0],
+					vram[addr + 1],
+					vram[addr + 2],
+					vram[addr + 3],
+				};
+				addr += 4;
+				int j = narrow<int>((p[2] & 7) + ((p[3] & 3) << 3)) - narrow<int>((p[3] & 4) << 3);
+				int k = narrow<int>((p[0] & 7) + ((p[1] & 3) << 3)) - narrow<int>((p[1] & 4) << 3);
+				for (auto n : xrange(4)) {
+					uint32_t pix;
+					if (p[n] & 0x08) {
+						pix = palette16[p[n] >> 4];
+					} else {
+						int Y = narrow<int>(p[n] >> 3);
+						auto [r, g, b] = yjk2rgb(Y, j, k);
+						int rr = (r << 3) | (r >> 2);
+						int gg = (g << 3) | (g >> 2);
+						int bb = (b << 3) | (b >> 2);
+						int aa = 255;
+						pix = (rr << 0) | (gg << 8) | (bb << 16) | (aa << 24);
+					}
+					line[4 * x + n] = pix;
+				}
+			}
+		}
+		break;
+
 	case SCR12:
 		for (auto y : xrange(lines)) {
 			auto* line = &output[256 * y];
@@ -837,6 +916,32 @@ void ImGuiBitmapViewer::renderBitmap(std::span<const uint8_t> vram, std::span<co
 					vram[addr + 1 + 0x10000],
 				};
 				addr += 2;
+				int j = narrow<int>((p[2] & 7) + ((p[3] & 3) << 3)) - narrow<int>((p[3] & 4) << 3);
+				int k = narrow<int>((p[0] & 7) + ((p[1] & 3) << 3)) - narrow<int>((p[1] & 4) << 3);
+				for (auto n : xrange(4)) {
+					int Y = narrow<int>(p[n] >> 3);
+					auto [r, g, b] = yjk2rgb(Y, j, k);
+					int rr = (r << 3) | (r >> 2);
+					int gg = (g << 3) | (g >> 2);
+					int bb = (b << 3) | (b >> 2);
+					int aa = 255;
+					line[4 * x + n] = (rr << 0) | (gg << 8) | (bb << 16) | (aa << 24);
+				}
+			}
+		}
+		break;
+
+	case SCR12NP:
+		for (auto y : xrange(lines)) {
+			auto* line = &output[256 * y];
+			for (auto x : xrange(64)) {
+				std::array<unsigned, 4> p = {
+					vram[addr + 0],
+					vram[addr + 1],
+					vram[addr + 2],
+					vram[addr + 3],
+				};
+				addr += 4;
 				int j = narrow<int>((p[2] & 7) + ((p[3] & 3) << 3)) - narrow<int>((p[3] & 4) << 3);
 				int k = narrow<int>((p[0] & 7) + ((p[1] & 3) << 3)) - narrow<int>((p[1] & 4) << 3);
 				for (auto n : xrange(4)) {

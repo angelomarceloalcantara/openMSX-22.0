@@ -93,7 +93,7 @@ public:
 	static constexpr int TICKS_HDISP_PERIOD = TICKS_DISP_BMP;
 	static constexpr int TICKS_BL_LATCH = 144 * CLK_MUL;
 	static constexpr int TICKS_DELAY_400 = 400 * CLK_MUL;
-	static constexpr int TICKS_DELAY_27 = 27 * CLK_MUL;
+	static constexpr int TICKS_DELAY_27 = CLK_MUL == 1 ? 27 : 112;
 
 	// Number of lines per frame.
 	static constexpr int PAL_LINES = 313;
@@ -151,11 +151,11 @@ public:
 	}
 
 	[[nodiscard]] bool isECOM() const {
-		return hasECOM() & ((controlRegs[20] & 0x20) != 0);
+		return hasV58() ? !isV58() : (hasECOM() & ((controlRegs[20] & 0x20) != 0));
 	}
 
 	[[nodiscard]] bool isEVR() const {
-		return hasEVR() & ((controlRegs[20] & 0x40) != 0);
+		return hasV58() ? !isV58() : (hasEVR() & ((controlRegs[20] & 0x40) != 0));
 	}
 
 	[[nodiscard]] bool isS16() const {
@@ -171,11 +171,27 @@ public:
 	}
 
 	[[nodiscard]] bool isFID() const {
-		return hasFID() & ((controlRegs[21] & 0x01) == 0);
+		return hasV58() ? !isV58() : (hasFID() & ((controlRegs[21] & 0x01) == 0));
 	}
 
-	[[nodiscard]] bool isV9968() const {
-		return (version & VM_V9968) != 0;
+	[[nodiscard]] bool isV58() const {
+		return hasV58() & ((controlRegs[21] & 0x01) != 0);
+	}
+
+	[[nodiscard]] bool isV9968_Old() const {
+		return (version & VM_V9968_OLD) != 0;
+	}
+
+	[[nodiscard]] bool isV9968_New() const {
+		return (version & VM_V9968_NEW) != 0;
+	}
+
+	[[nodiscard]] bool canEVR() const {
+		return hasEVR() || hasV58();
+	}
+
+	[[nodiscard]] bool canECOM() const {
+		return hasECOM() || hasV58();
 	}
 
 	/** Is this an MSX1 VDP?
@@ -191,6 +207,14 @@ public:
 	  */
 	[[nodiscard]] bool isVDPwithPALonly() const {
 		return (version & VM_PAL) != 0;
+	}
+
+	[[nodiscard]] constexpr bool isPlanar(DisplayMode mode, bool sp3Bit) const {
+		return mode.isPlanar() & !sp3Bit;
+	}
+
+	[[nodiscard]] constexpr bool isPlanar() const {
+		return isPlanar(displayMode, isSP3());
 	}
 
 	/** Is this a VDP that lacks mirroring?
@@ -242,11 +266,11 @@ public:
 	}
 
 	[[nodiscard]] bool hasECOM() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
 	}
 
 	[[nodiscard]] bool hasEVR() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
 	}
 
 	[[nodiscard]] bool hasS16() const {
@@ -266,7 +290,11 @@ public:
 	}
 
 	[[nodiscard]] bool hasFID() const {
-		return (version & VM_V9968) != 0;
+		return (version & VM_V9968_OLD) != 0;
+	}
+
+	[[nodiscard]] bool hasV58() const {
+		return (version & VM_V9968_NEW) != 0;
 	}
 
 	/** Get the (fixed) palette for this MSX1 VDP.
@@ -908,7 +936,9 @@ private:
 	static constexpr unsigned VM_TOSHIBA_PALETTE  =  32; // set-> has Toshiba palette
 	static constexpr unsigned VM_YJK              =  64; // set-> has YJK (MSX2+)
 	static constexpr unsigned VM_YM2220_PALETTE   = 128; // set-> has YM2220 palette
-	static constexpr unsigned VM_V9968            = 256; // set-> has YJK (MSX2+)
+	static constexpr unsigned VM_V9968_OLD        = 256; 
+	static constexpr unsigned VM_V9968_NEW        = 512; 
+	static constexpr unsigned VM_V9968            = (512 | 256);
 
 	/** VDP version: the VDP model being emulated. */
 	enum VdpVersion : uint16_t {
@@ -952,7 +982,10 @@ private:
 		V9958      = VM_YJK,
 
 		/** MSX2+ and turbo R VDP. */
-		V9968      = VM_YJK | VM_V9968,
+		V9968_OLD  = VM_YJK | VM_V9968_OLD,
+
+		/** MSX2+ and turbo R VDP. */
+		V9968_NEW  = VM_YJK | VM_V9968_NEW,
 	};
 
 	struct SyncBase : public Schedulable {
@@ -1181,7 +1214,7 @@ private:
 	/** Display mode has changed.
 	  * Update displayMode's value and inform the Renderer.
 	  */
-	void updateDisplayMode(DisplayMode newMode, bool cmdBit, EmuTime time);
+	void updateDisplayMode(DisplayMode newMode, bool cmdBit, bool sp3Bit, EmuTime time);
 
 	/** EVR has changed.
 	  */
@@ -1189,6 +1222,17 @@ private:
 
 	// Observer<Setting>
 	void update(const Setting& setting) noexcept override;
+
+	/** update chip version value
+	  */
+	void updateChipVersion(bool v9968) {
+		statusReg1 &= ~(0x1F << 1);
+		statusReg1 |= v9968 ? (0x03 << 1) : (0x02 << 1);
+	}
+
+	/** update EVR
+	  */
+	void updateEVRMode(bool evr, EmuTime time);
 
 private:
 	Display& display;

@@ -145,7 +145,9 @@ VDP::VDP(const DeviceConfig& config)
 	else if (versionString == "TMS9129") version = TMS9129;
 	else if (versionString == "V9938") version = V9938;
 	else if (versionString == "V9958") version = V9958;
-	else if (versionString == "V9968") version = V9968;
+	else if (versionString == "V9968") version = V9968_NEW;
+	else if (versionString == "V9968_OLD") version = V9968_OLD;
+	else if (versionString == "V9968_NEW") version = V9968_NEW;
 	else if (versionString == "YM2220PAL") version = YM2220PAL;
 	else if (versionString == "YM2220NTSC") version = YM2220NTSC;
 	else throw MSXException("Unknown VDP version \"", versionString, '"');
@@ -180,7 +182,7 @@ VDP::VDP(const DeviceConfig& config)
 	};
 	controlRegMask = isMSX1VDP() ? 0x07 : 0x3F;
 	controlValueMasks = isMSX1VDP() ? VALUE_MASKS_MSX1 : VALUE_MASKS_MSX2;
-	if (version == V9958 || version == V9968) {
+	if (version == V9958 || version == V9968_OLD || version == V9968_NEW) {
 		// Enable V9958-specific control registers.
 		controlValueMasks[25] = 0x7F;
 		controlValueMasks[26] = 0x3F;
@@ -206,7 +208,6 @@ VDP::VDP(const DeviceConfig& config)
 		controlValueMasks[20] |= 0x20;
 	}
 	if (hasEVR()) {
-		updateAddressMask(false);
 		controlValueMasks[20] |= 0x40;
 	}
 	if (hasS16()) {
@@ -224,13 +225,20 @@ VDP::VDP(const DeviceConfig& config)
 	if (hasFID()) {
 		controlValueMasks[21] |= 0x01;
 	}
+	if (hasV58()) {
+		controlValueMasks[21] |= 0x01;
+	}
+
+	if (canEVR()) {
+		updateAddressMask(false);
+	}
 
 	resetInit(); // must be done early to avoid UMRs
 
 	// Video RAM.
 	EmuTime time = getCurrentTime();
 	unsigned vramSize;
-	if (hasEVR()) {
+	if (canEVR()) {
 		vramSize = 256;
 	} else {
 		vramSize = (isMSX1VDP() ? 16 : config.getChildDataAsInt("vram", 0));
@@ -340,8 +348,12 @@ void VDP::resetInit()
 			statusReg1 = 0x00 << 1;
 			break;
 		case V9958:
-		case V9968:
 			statusReg1 = 0x02 << 1;
+			break;
+		case V9968_OLD:
+		case V9968_NEW:
+			statusReg1 = 0;
+			updateChipVersion((controlRegs[21] & 0x01) == 0x00);
 			break;
 	}
 	statusReg2 = 0x0C;
@@ -516,6 +528,7 @@ void VDP::execSetMode(EmuTime time)
 	updateDisplayMode(
 		DisplayMode(controlRegs[0], controlRegs[1], controlRegs[25]),
 		getCmdBit(),
+		isSP3(),
 		time);
 }
 
@@ -990,11 +1003,11 @@ void VDP::scheduleCpuVramAccess(bool isRead, uint8_t write, EmuTime time)
 void VDP::executeCpuVramAccess(EmuTime time)
 {
 	int addr = (controlRegs[14] << 14) | vramPointer;
-	if (displayMode.isPlanar()) {
+	if (isPlanar()) {
 		// note: also extended VRAM is interleaved,
 		//       because there is only 64kB it's interleaved
 		//       with itself (every byte repeated twice)
-		if (hasEVR()) {
+		if (canEVR()) {
 			addr = ((addr & 0x20000) | ((addr << 16) & 0x10000) | ((addr >> 1) & 0x0FFFF)) & 0x3FFFF;
 		} else {
 			addr = ((addr << 16) | (addr >> 1)) & 0x1FFFF;
@@ -1004,7 +1017,7 @@ void VDP::executeCpuVramAccess(EmuTime time)
 	bool doAccess = [&] {
 		if (!cpuExtendedVram) [[likely]] {
 			return true;
-		} else if (hasEVR()) {
+		} else if (canEVR()) {
 			return false;
 		} else if (vram->getSize() == 192 * 1024) [[likely]] {
 			addr = 0x20000 | (addr & 0xFFFF);
@@ -1190,10 +1203,10 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		// MXC belongs to CPU interface;
 		// other bits in this register belong to command engine.
 		if (reg == 45) {
-			cpuExtendedVram = ((val & 0x40) != 0) && !hasEVR() && !isECOM();
+			cpuExtendedVram = ((val & 0x40) != 0) && !canEVR() && !isECOM();
 		}
 		// Pass command register writes to command engine.
-		if (reg < (hasECOM() ? 59 : 47)) {
+		if (reg < (canECOM() ? 59 : 47)) {
 			cmdEngine->setCmdReg(reg - 32, val, time);
 		}
 		return;
@@ -1258,7 +1271,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		// old code does not hurt.
 		// Eventually this line should be re-enabled.
 		/*
-		if (displayMode.isPlanar()) {
+		if (isPlanar()) {
 			base = ((base << 16) | (base >> 1)) & 0x1FFFF;
 		}
 		*/
@@ -1308,6 +1321,12 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		}
 		break;
 	case 20:
+		if (hasSP3() && (change & 0x08)) {
+			updateDisplayMode(getDisplayMode(),
+							  getCmdBit(),
+							  (val & 0x08) != 0,
+							  time);
+		}
 		if (   (hasSP3()  && (change & 0x08))
 			|| (hasEPAL() && (change & 0x10))
 			|| (hasILNS() && (change & 0x04))
@@ -1315,8 +1334,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 			syncAtNextLine(syncSetMode, time);
 		}
 		if (hasEVR() && (change & 0x40)) {
-			updateAddressMask((val & 0x40) != 0);
-			vram->updateEVRMode((val & 0x40) != 0, time);
+			updateEVRMode((val & 0x40) != 0, time);
 		}
 		if (hasS16()  && (change & 0x80)) {
 			syncAtNextLine(syncSetSprites, time);
@@ -1324,8 +1342,13 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		break;
 	case 21:
 		if (hasFID() && (change & 0x01)) {
-			statusReg1 &= ~(0x1F << 1);
-			statusReg1 |= (val & 0x01) ? (0x02 << 1) : (0x03 << 1);
+			bool v9968 = (val & 0x01) == 0;
+			updateChipVersion(v9968);
+		}
+		if (hasV58() && (change & 0x01)) {
+			bool v9968 = (val & 0x01) == 0;
+			updateChipVersion(v9968);
+			updateEVRMode(v9968, time);
 		}
 		break;
 	case 23:
@@ -1336,6 +1359,7 @@ void VDP::changeRegister(uint8_t reg, uint8_t val, EmuTime time)
 		if (change & (DisplayMode::REG25_MASK | 0x40)) {
 			updateDisplayMode(getDisplayMode().updateReg25(val),
 			                  val & 0x40,
+							  isSP3(),
 			                  time);
 		}
 		if (change & 0x08) {
@@ -1468,7 +1492,7 @@ void VDP::updateNameBase(EmuTime time)
 	// old code does not hurt.
 	// Eventually this line should be re-enabled.
 	/*
-	if (displayMode.isPlanar()) {
+	if (isPlanar()) {
 		base = ((base << 16) | (base >> 1)) & 0x1FFFF;
 	}
 	*/
@@ -1571,8 +1595,8 @@ void VDP::updateSpriteAttributeBase(EmuTime time)
 		indexMask = ~0u << 9;
 		break;
 	}
-	if (displayMode.isPlanar()) {
-		baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
+	if (isPlanar()) {
+		baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (canEVR() ? 0x3FFFF : 0x1FFFF);
 		indexMask = ((indexMask << 16) |  ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 	}
 	vram->spriteAttribTable.setMask(baseMask, indexMask, time);
@@ -1585,8 +1609,8 @@ void VDP::updateSpritePatternBase(EmuTime time)
 	case 2: {
 		unsigned baseMask = (controlRegs[6] << 11) | ~(~0u << 11);
 		unsigned indexMask = ~0u << 11;
-		if (displayMode.isPlanar()) {
-			baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (hasEVR() ? 0x3FFFF : 0x1FFFF);
+		if (isPlanar()) {
+			baseMask = ((baseMask & 0x20000) | ((baseMask << 16) & 0x10000) | ((baseMask >> 1) & 0x0FFFF)) & (canEVR() ? 0x3FFFF : 0x1FFFF);
 			indexMask = ((indexMask << 16) | ~(1 << 16)) & (((indexMask >> 1) & 0x0FFFF) | (indexMask & 0x20000));
 		}
 		vram->spritePatternTable.setMask(baseMask, indexMask, time);
@@ -1601,22 +1625,21 @@ void VDP::updateSpritePatternBase(EmuTime time)
 	}
 }
 
-void VDP::updateDisplayMode(DisplayMode newMode, bool cmdBit, EmuTime time)
+void VDP::updateDisplayMode(DisplayMode newMode, bool cmdBit, bool sp3Bit, EmuTime time)
 {
 	// Synchronize subsystems.
-	vram->updateDisplayMode(newMode, cmdBit, time);
+	vram->updateDisplayMode(newMode, cmdBit, sp3Bit, time);
 
 	// TODO: Is this a useful optimisation, or doesn't it help
 	//       in practice?
 	// What aspects have changed:
 	// Switched from planar to non-planar or vice versa.
 	bool planarChange =
-		newMode.isPlanar() != displayMode.isPlanar();
+		isPlanar(newMode, sp3Bit) != isPlanar(displayMode, isSP3());
 	// Sprite mode changed.
 	bool msx1 = isMSX1VDP();
-	bool sp3 = isSP3();
 	bool spriteModeChange =
-		newMode.getSpriteMode(msx1, sp3) != displayMode.getSpriteMode(msx1, sp3);
+		newMode.getSpriteMode(msx1, sp3Bit) != displayMode.getSpriteMode(msx1, sp3Bit);
 
 	// Commit the new display mode.
 	displayMode = newMode;
@@ -1649,6 +1672,11 @@ void VDP::updateAddressMask(bool evr)
 	controlValueMasks[10] = evr ? 0x0F : 0x0F;
 	controlValueMasks[11] = evr ? 0x07 : 0x07;
 	controlValueMasks[14] = evr ? 0x0F : 0x07;
+}
+
+void VDP::updateEVRMode(bool evr, EmuTime time) {
+	updateAddressMask(evr);
+	vram->updateEVRMode(evr, time);
 }
 
 void VDP::update(const Setting& setting) noexcept

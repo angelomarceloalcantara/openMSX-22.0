@@ -17,7 +17,7 @@ namespace openmsx {
 class ImGuiBitmapViewer final : public ImGuiPart
 {
 public:
-	enum ScrnMode : int { SCR5, SCR6, SCR7, SCR8, SCR11, SCR12, OTHER };
+	enum ScrnMode : int { SCR5, SCR6, SCR7, SCR7NP, SCR8, SCR8NP, SCR11, SCR11NP, SCR12, SCR12NP, OTHER };
 
 public:
 	ImGuiBitmapViewer(ImGuiManager& manager_, size_t index);

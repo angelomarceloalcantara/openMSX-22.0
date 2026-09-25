@@ -212,6 +212,7 @@ public:
 							color |= info2.colorAttrib & 0x0F;
 						}
 					}
+					color |= info.paletteSet;
 					if constexpr (MODE == DisplayMode::GRAPHIC5) {
 						Pixel pixL = palette[color >> 2];
 						Pixel pixR = palette[color & 3];

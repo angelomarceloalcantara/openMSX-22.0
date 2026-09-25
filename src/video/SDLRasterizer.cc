@@ -70,24 +70,32 @@ static constexpr int translateX(int absoluteX, bool narrow)
 	if (absoluteX < TICKS_LEFT_BORDER) return 0;
 	if (absoluteX > TICKS_RIGHT_BORDER) return maxX;
 
-	// Note: The ROUND_MASK forces the ticks to a pixel (2-tick) boundary.
-	//       If this is not done, rounding errors will occur.
-	const int ROUND_MASK = narrow ? (VDP::CLK_MUL * ~1) : (VDP::CLK_MUL * ~3);
-	return (((absoluteX - (TICKS_VISIBLE_MIDDLE & ROUND_MASK))
-		>> (narrow ? 1 : 2))) / VDP::CLK_MUL
+	// Note: The origin is forced to a pixel boundary, otherwise rounding
+	//       errors will occur. It must be the same boundary the display area
+	//       sits on: getLeftBackground() is 2 (mod 4), so the origin is too,
+	//       else mid-line border-color changes land half a pixel off it.
+	static_assert(((TICKS_VISIBLE_MIDDLE / VDP::CLK_MUL) % 4) == 3);
+	const int origin = TICKS_VISIBLE_MIDDLE - 1 * VDP::CLK_MUL;
+	return (((absoluteX - origin)
+		>> (narrow ? 1 : 2))
+		/ VDP::CLK_MUL)
 		+ maxX / 2;
 }
 
 inline void SDLRasterizer::renderBitmapLine(std::span<Pixel> buf, unsigned vramLine)
 {
-	if (vdp.getDisplayMode().isPlanar()) {
+	if (!vdp.getDisplayMode().isPlanar()) {
+		auto vramPtr =
+			vram.bitmapCacheWindow.getReadArea<128>(vramLine * 128);
+		bitmapConverter.convertLine(buf, vramPtr);
+	} else if (vdp.isPlanar()) {
 		auto [vramPtr0, vramPtr1] =
 			vram.bitmapCacheWindow.getReadAreaPlanar<256>(vramLine * 256);
 		bitmapConverter.convertLinePlanar(buf, vramPtr0, vramPtr1);
 	} else {
 		auto vramPtr =
-			vram.bitmapCacheWindow.getReadArea<128>(vramLine * 128);
-		bitmapConverter.convertLine(buf, vramPtr);
+			vram.bitmapCacheWindow.getReadArea<256>(vramLine * 256);
+		bitmapConverter.convertLineNonPlanar(buf, vramPtr);
 	}
 }
 
@@ -608,8 +616,14 @@ void SDLRasterizer::drawDisplay(
 			//   needed when vdp.isFastBlinkEnabled() is true.
 			//   Idea: can be cheaply calculated incrementally.
 			bool filMode = vdp.isFIL();
-			unsigned pageMaskOdd = (mode.isPlanar() ? 0x000 : 0x200) |
-				(filMode ? (vdp.getEvenOdd() ? 0x100 : 0x000) : vdp.getEvenOddMask(y));
+			unsigned pageMaskOdd = filMode ? (vdp.getEvenOdd() ? 0x100 : 0x000) : vdp.getEvenOddMask(y);
+			if (vdp.isEVR()) {
+				pageMaskOdd |= vdp.getDisplayMode().isPlanar() ? ((3 << 8) & ~0x100)	// page0~3 : screen7,8,10,11,12
+															   : ((7 << 8) & ~0x100);	// page0~7 : screen5,6
+			} else {
+				pageMaskOdd |= vdp.getDisplayMode().isPlanar() ? ((1 << 8) & ~0x100)	// page0~1 : screen7,8,10,11,12
+															   : ((3 << 8) & ~0x100);	// page0~3 : screen5,6
+			}
 			unsigned pageMaskEven = vdp.isMultiPageScrolling()
 				? (pageMaskOdd & ~0x100)
 				: pageMaskOdd;

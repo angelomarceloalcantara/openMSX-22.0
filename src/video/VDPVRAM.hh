@@ -516,7 +516,7 @@ public:
 	  * @param cmdBit Are VDP commands allowed in non-bitmap mode.
 	  * @param time The moment in emulated time this change occurs.
 	  */
-	void updateDisplayMode(DisplayMode mode, bool cmdBit, EmuTime time);
+	void updateDisplayMode(DisplayMode mode, bool cmdBit, bool sp3Bit, EmuTime time);
 
 	/** Used by the VDP to signal display enabled changes.
 	  * Both the regular border start/end and forced blanking by clearing

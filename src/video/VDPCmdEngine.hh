@@ -462,6 +462,7 @@ private:
 	unsigned ADY{0};			// Y-loop every 8 horizontal dots (use for LFMM)
 	unsigned ASA{0};			// source address (use for LFMM)
 	unsigned fontWidthCount{0};	// Font width counter (use for LFMM, LFMC)
+	uint8_t fontColor{0};		// Font color (use for LFMC)
 
 	/** The last executed command (for debugging only).
 	  * A copy of the above registers when the command starts. Remains valid

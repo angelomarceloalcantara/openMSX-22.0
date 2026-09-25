@@ -19,7 +19,9 @@ namespace openmsx {
 
 static constexpr uint8_t VER_ALL   = 0xFF;
 static constexpr uint8_t VER_V9958 = 0x01;
-static constexpr uint8_t VER_V9968 = 0x02;
+static constexpr uint8_t VER_V9968_OLD = 0x02;
+static constexpr uint8_t VER_V9968_NEW = 0x04;
+static constexpr uint8_t VER_V9968 = (VER_V9968_OLD | VER_V9968_NEW);
 
 void ImGuiVdpRegs::save(ImGuiTextBuffer& buf)
 {
@@ -173,7 +175,7 @@ static constexpr auto registerDescriptions = std::array{
 	RD{{" 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", "BX8"}, "Border X register high"}, // S#9
 };
 
-static constexpr auto registerDescriptionsV9968 = std::array{
+static constexpr auto registerDescriptionsV9968_Old = std::array{
 	RD{{" 0 ", "DG ", "IE2", "IE1", "M5 ", "M4 ", "M3 ", " 0 "}, "Mode register 0"}, // R#0
 	RD{{" 0 ", "BL ", "IE0", "M1 ", "M2 ", " 0 ", "SI ", "MAG"}, "Mode register 1"}, // R#1
 	RD{{"A17", "A16", "A15", "A14", "A13", "A12", "A11", "A10"}, "Pattern name table base address register"}, // R#2
@@ -198,6 +200,94 @@ static constexpr auto registerDescriptionsV9968 = std::array{
 	RD{{"IL7", "IL6", "IL5", "IL4", "IL3", "IL2", "IL1", "IL0"}, "Interrupt line register"}, // R#19
 	RD{{"S16", "EVR","ECOM","EPAL", "SP3","ILNS","SVNS", "HS "}, "Ext mode register 1"}, // R#20
 	RD{{"CEIE","FIL", " 1 ", " 1 ", " 1 ", " 0 ", " 1 ", "FID"}, "Ext mode register 2"}, // R#21
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", " 1 ", " 0 ", " 1 "}, "Color burst register 3"}, // R#22
+	RD{{"DO7", "DO6", "DO5", "DO4", "DO3", "DO2", "DO1", "DO0"}, "Display offset register"}, // R#23
+
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#24
+	RD{{" 0 ", "CMD", "VDS", "YAE", "YJK", "WTE", "MSK", "SP2"}, "V9958 control register"}, // R#25
+	RD{{" 0 ", " 0 ", "HO8", "HO7", "HO6", "HO5", "HO4", "HO3"}, "Horizontal scroll register high"}, // R#26
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", "HO2", "HO1", "HO0"}, "Horizontal scroll register low"}, // R#27
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#28
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#29
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#30
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#31
+
+	RD{{"SX7", "SX6", "SX5", "SX4", "SX3", "SX2", "SX1", "SX0"}, "Source X low register"}, // R#32
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ","SX11","SX10", "SX9", "SX8"}, "Source X high register"}, // R#33
+	RD{{"SY7", "SY6", "SY5", "SY4", "SY3", "SY2", "SY1", "SY0"}, "Source Y low register"}, // R#34
+	RD{{" 0 ", " 0 ", " 0 ","SY12","SY11","SY10","SY9", "SY8"}, "Source Y high register"}, // R#35
+	RD{{"DX7", "DX6", "DX5", "DX4", "DX3", "DX2", "DX1", "DX0"}, "Destination X low register"}, // R#36
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", " 0 ", " 0 ", "DX8"}, "Destination X high register"}, // R#37
+	RD{{"DY7", "DY6", "DY5", "DY4", "DY3", "DY2", "DY1", "DY0"}, "Destination Y low register"}, // R#38
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", "DY10","DY9", "DY8"}, "Destination Y high register"}, // R#39
+
+	RD{{"NX7", "NX6", "NX5", "NX4", "NX3", "NX2", "NX1", "NX0"}, "Number of dots X low register"}, // R#40
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ","NX10", "NX9", "NX8"}, "Number of dots X high register"}, // R#41
+	RD{{"NY7", "NY6", "NY5", "NY4", "NY3", "NY2", "NY1", "NY0"}, "Number of dots Y low register"}, // R#42
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", "NY10","NY9", "NY8"}, "Number of dots Y high register"}, // R#43
+	RD{{"CH3", "CH2", "CH1", "CH0", "CL3", "CL2", "CL1", "CL0"}, "Color register"}, // R#44
+	RD{{"FG4", "XHR", "MXD", "MXS", "DIY", "DIX", "EQ ", "MAJ"}, "Argument register"}, // R#45
+	RD{{"CM3", "CM2", "CM1", "CM0", "LO3", "LO2", "LO1", "LO0"}, "Command register"}, // R#46
+	RD{{"VX7", "VX6", "VX5", "VX4", "VX3", "VX2", "VX1", "VX0"}, ""}, // R#47
+
+	RD{{"VX15","VX14","VX13","VX12","VX11","VX10","VX9", "VX8"}, ""}, // R#48
+	RD{{"VY7", "VY6", "VY5", "VY4", "VY3", "VY2", "VY1", "VY0"}, ""}, // R#49
+	RD{{"VY15","VY14","VY13","VY12","VY11","VY10","VY9", "VY8"}, ""}, // R#50
+	RD{{"WSX7","WSX6","WSX5","WSX4","WSX3","WSX2","WSX1","WSX0"}, ""}, // R#51
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", "WSX8"}, ""}, // R#52
+	RD{{"WSY7","WSY6","WSY5","WSY4","WSY3","WSY2","WSY1","WSY0"}, ""}, // R#53
+	RD{{" - ", " - ", " - ", " - ", " - ","WSY10","WSY9","WSY8"}, ""}, // R#54
+	RD{{"WEX7","WEX6","WEX5","WEX4","WEX3","WEX2","WEX1","WEX0"}, ""}, // R#55
+
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", "WEX8"}, ""}, // R#56
+	RD{{"WEY7","WEY6","WEY5","WEY4","WEY3","WEY2","WEY1","WEY0"}, ""}, // R#57
+	RD{{" - ", " - ", " - ", " - ", " - ","WEY10","WEY9","WEY8"}, ""}, // R#58
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#59
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#60
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#61
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#62
+	RD{{" - ", " - ", " - ", " - ", " - ", " - ", " - ", " - "}, ""}, // R#63
+
+	// We put info on the status registers in the same table as the normal VDP registers,
+	// (as-if they were registers R#64-R73, but that's nonsense of course)
+	RD{{" F ", "5S ", " C ", "FS4", "FS3", "FS2", "FS1", "FS0"}, "Status register 0"}, // S#0
+	RD{{"FL ", "LPS", "ID4", "ID3", "ID2", "ID1", "ID0", "FH "}, "Status register 1"}, // S#1
+	RD{{"TR ", "VR ", "HR ", "BD ", " 1 ", " 1 ", "EO ", "CE "}, "Status register 2"}, // S#2
+	RD{{"X7 ", "X6 ", "X5 ", "X4 ", "X3 ", "X2 ", "X1 ", "X0 "}, "Column register low"}, // S#3
+	RD{{" 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", "X8 "}, "Column register high"}, // S#4
+	RD{{"Y7 ", "Y6 ", "Y5 ", "Y4 ", "Y3 ", "Y2 ", "Y1 ", "Y0 "}, "Row register low"}, // S#5
+	RD{{" 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", "EO ", "Y8 "}, "Row register high"}, // S#6
+	RD{{"C7 ", "C6 ", "C5 ", "C4 ", "C3 ", "C2 ", "C1 ", "C0 "}, "Color register"}, // S#7
+
+	RD{{"BX7", "BX6", "BX5", "BX4", "BX3", "BX2", "BX1", "BX0"}, "Border X register low"}, // S#8
+	RD{{" 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", " 1 ", "BX8"}, "Border X register high"}, // S#9
+};
+
+static constexpr auto registerDescriptionsV9968_New = std::array{
+	RD{{" 0 ", "DG ", "IE2", "IE1", "M5 ", "M4 ", "M3 ", " 0 "}, "Mode register 0"}, // R#0
+	RD{{" 0 ", "BL ", "IE0", "M1 ", "M2 ", " 0 ", "SI ", "MAG"}, "Mode register 1"}, // R#1
+	RD{{"A17", "A16", "A15", "A14", "A13", "A12", "A11", "A10"}, "Pattern name table base address register"}, // R#2
+	RD{{"A13", "A12", "A11", "A10", "A9 ", "A8 ", "A7 ", "A6 "}, "Color table base address register low"}, // R#3
+	RD{{" 0 ", "A17", "A16", "A15", "A14", "A13", "A12", "A11"}, "Pattern generator table base address register"}, // R#4
+	RD{{"A14", "A13", "A12", "A11", "A10", "A9 ", "A8 ", "A7 "}, "Sprite attribute table base address register low"}, // R#5
+	RD{{" 0 ", "A17", "A16", "A15", "A14", "A13", "A12", "A11"}, "Sprite pattern generator table base address register"}, // R#6
+	RD{{"TC3", "TC2", "TC1", "TC0", "BD3", "BD2", "BD1", "BD0"}, "Text color/Back drop color register"}, // R#7
+
+	RD{{"MS ", "LP ", "TP ", "CB ", "VR ", " 0 ", "SPD", "BW "}, "Mode register 2"}, // R#8
+	RD{{"LN ", " 0 ", "S1 ", "S2 ", "IL ", "EO ", "*NT", "DC "}, "Mode register 3"}, // R#9
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", "A17", "A16", "A15", "A14"}, "Color table base address register high"}, // R#10
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", "A17", "A16", "A15"}, "Sprite attribute table base address register high"}, // R#11
+	RD{{"T23", "T22", "T21", "T20", "BC3", "BC2", "BC1", "BC0"}, "Text color/Back color register"}, // R#12
+	RD{{"ON3", "ON2", "ON1", "ON0", "OF3", "OF2", "OF1", "OF0"}, "Blinking period register"}, // R#13
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", "A17", "A16", "A15", "A14"}, "VRAM Access base address register"}, // R#14
+	RD{{" 0 ", " 0 ", " 0 ", " 0 ", "S3 ", "S2 ", "S1 ", "S0 "}, "Status register pointer"}, // R#15
+
+	RD{{"C7 ", "C6 ", "C5 ", "C4 ", "C3 ", "C2 ", "C1 ", "C0 "}, "Color palette address register"}, // R#16
+	RD{{"AII", " 0 ", "RS5", "RS4", "RS3", "RS2", "RS1", "RS0"}, "Control register pointer"}, // R#17
+	RD{{"V3 ", "V2 ", "V1 ", "V0 ", "H3 ", "H2 ", "H1 ", "H0 "}, "Display adjust register"}, // R#18
+	RD{{"IL7", "IL6", "IL5", "IL4", "IL3", "IL2", "IL1", "IL0"}, "Interrupt line register"}, // R#19
+	RD{{"S16", " 0 ", " 0 ","EPAL", "SP3","ILNS","SVNS", "HS "}, "Ext mode register 1"}, // R#20
+	RD{{"CEIE","FIL", " 1 ", " 1 ", " 1 ", " 0 ", " 1 ", "V58"}, "Ext mode register 2"}, // R#21
 	RD{{" 0 ", " 0 ", " 0 ", " 0 ", " 0 ", " 1 ", " 0 ", " 1 "}, "Color burst register 3"}, // R#22
 	RD{{"DO7", "DO6", "DO5", "DO4", "DO3", "DO2", "DO1", "DO0"}, "Display offset register"}, // R#23
 
@@ -425,12 +515,13 @@ static constexpr auto regFunctions = std::array{
 	R{VER_V9968,{S{20, 0x04}}, "Interrupt line position Non-following scroll", [](uint32_t v) { return tmpStrCat("H-INT V.Pos: ", (v & 0x01) ? "non-follow" : "follow", "\n"); }},
 	R{VER_V9968,{S{20, 0x08}}, "Sprite mode3", [](uint32_t v) { return tmpStrCat("Sprite mode: ", (v & 0x01) ? "Mode3" : "Mode1/2", "\n"); }},
 	R{VER_V9968,{S{20, 0x10}}, "Ext Palette", [](uint32_t v) { return tmpStrCat("Palette mode: ", (v & 0x01) ? "256palettes(5:5:5)" : "16palettes(3:3:3)", "\n"); }},
-	R{VER_V9968,{S{20, 0x20}}, "Ext Command", [](uint32_t v) { return tmpStrCat("Ext. command: ", (v & 0x01) ? "enable" : "disable", "\n"); }},
-	R{VER_V9968,{S{20, 0x40}}, "VRAM size", [](uint32_t v) { return tmpStrCat("VRAM size: ", (v & 0x01) ? "256k" : "128k", "\n"); }},
+	R{VER_V9968_OLD,{S{20, 0x20}}, "Ext Command", [](uint32_t v) { return tmpStrCat("Ext. command: ", (v & 0x01) ? "enable" : "disable", "\n"); }},
+	R{VER_V9968_OLD,{S{20, 0x40}}, "VRAM size", [](uint32_t v) { return tmpStrCat("VRAM size: ", (v & 0x01) ? "256k" : "128k", "\n"); }},
 	R{VER_V9968,{S{20, 0x80}}, "Up to 16-sprites par line", [](uint32_t v) { return tmpStrCat("Sprite per line: ", (v & 0x01) ? "16-planes" : "4/8-planes", "\n"); }},
 	R{VER_V9968,{S{21, 0x80}}, "Command End Interrupt Enable", [](uint32_t v) { return tmpStrCat("Command end interrupt: ", (v & 0x01) ? "enable" : "disable", "\n"); }},
 	R{VER_V9968,{S{21, 0x40}}, "Flat Interlace mode", [](uint32_t v) { return tmpStrCat("Interlace style: ", (v & 0x01) ? "flat" : "interleave", "\n"); }},
-	R{VER_V9968,{S{21, 0x01}}, "Fake chip ID", [](uint32_t v) { return tmpStrCat("chip ID: ", (v & 0x01) ? "V9958" : "V9968", "\n"); }},
+	R{VER_V9968_OLD,{S{21, 0x01}}, "Fake chip ID", [](uint32_t v) { return tmpStrCat("chip ID: ", (v & 0x01) ? "V9958" : "V9968", "\n"); }},
+	R{VER_V9968_NEW,{S{21, 0x01}}, "V9958 compatible mode", [](uint32_t v) { return tmpStrCat("mode: ", (v & 0x01) ? "V9958 compatible" : "V9968", "\n"); }},
 	R{VER_ALL  ,{S{7, 0}}, "", &spacing},
 
 	// Display registers
@@ -601,15 +692,15 @@ static constexpr auto regFunctions = std::array{
 	R{VER_ALL  ,{S{72, 0xFF}, S{73, 0x01}}, "result of SRCH command", &noExplanation},
 };
 
-static bool checkVersion(const RegFunction& func, bool v9968) {
-	return (func.version & (v9968 ? VER_V9968 : VER_V9958)) != 0;
+static bool checkVersion(const RegFunction& func, uint8_t ver) {
+	return (func.version & ver) != 0;
 }
 
-static int lookupFunction(bool v9968, uint8_t reg, uint8_t mask)
+static int lookupFunction(uint8_t ver, uint8_t reg, uint8_t mask)
 {
 	int i = 0;
 	for (const auto& f : regFunctions) {
-		if (checkVersion(f, v9968)) {
+		if (checkVersion(f, ver)) {
 			for (const auto& s : f.subs) {
 				if ((reg == s.reg) && (mask & s.mask)) {
 					return i;
@@ -624,6 +715,7 @@ static int lookupFunction(bool v9968, uint8_t reg, uint8_t mask)
 void ImGuiVdpRegs::drawSection(std::span<const uint8_t> showRegisters, std::span<const uint8_t> regValues,
                                VDP& vdp, EmuTime time)
 {
+	uint8_t version = vdp.isV9968_New() ? VER_V9968_NEW : vdp.isV9968_Old() ? VER_V9968_OLD : VER_V9958;
 	ImGui::SameLine();
 	HelpMarker("Click to toggle bits, or edit the hex-field.\n"
 	           "Right-click to show/hide register explanation.");
@@ -644,7 +736,8 @@ void ImGuiVdpRegs::drawSection(std::span<const uint8_t> showRegisters, std::span
 			auto reg = showRegisters[i];
 			// note:  0..63  regular register
 			//       64..73  status register
-			const auto& rd = vdp.isV9968() ? registerDescriptionsV9968[reg] : registerDescriptions[reg];
+			const auto& rd = vdp.isV9968_New() ? registerDescriptionsV9968_New[reg] : 
+			                 vdp.isV9968_Old() ? registerDescriptionsV9968_Old[reg] : registerDescriptions[reg];
 			if (ImGui::TableNextColumn()) {
 				auto name = tmpStrCat(reg < 64 ? "R#"sv : "S#"sv, reg < 64 ? reg : reg - 64);
 				ImGui::AlignTextToFramePadding();
@@ -667,7 +760,7 @@ void ImGuiVdpRegs::drawSection(std::span<const uint8_t> showRegisters, std::span
 				if (ImGui::TableNextColumn()) {
 					int bit = 7 - bit_;
 					auto mask = narrow<uint8_t>(1 << bit);
-					int f = lookupFunction(vdp.isV9968(), reg, mask);
+					int f = lookupFunction(version, reg, mask);
 					if (f != -1 && f == hoveredFunction) {
 						ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
 							getColor(imColor::YELLOW));
@@ -698,7 +791,7 @@ void ImGuiVdpRegs::drawSection(std::span<const uint8_t> showRegisters, std::span
 			const auto& func = regFunctions[f];
 			if (!(contains(showRegisters, func.subs[0].reg) ||
 			      contains(showRegisters, func.subs[1].reg)) ||
-				 !checkVersion(func, vdp.isV9968())) {
+				 !checkVersion(func, version)) {
 				continue;
 			}
 			uint32_t value = 0;
@@ -751,7 +844,7 @@ void ImGuiVdpRegs::paint(MSXMotherBoard* motherBoard)
 		auto time = motherBoard->getCurrentTime();
 		const bool tms99x8 = vdp->isMSX1VDP();
 		const bool v9958 = vdp->hasYJK();
-		const bool v9968 = vdp->isV9968();
+		const bool v9968 = vdp->isV9968_Old() || vdp->isV9968_New();
 
 		g_vdp = vdp;
 		for (auto reg : xrange(64)) {
@@ -806,7 +899,7 @@ void ImGuiVdpRegs::paint(MSXMotherBoard* motherBoard)
 				});
 			}
 		});
-		if (vdp->isV9968()) {
+		if (vdp->isV9968_Old() || vdp->isV9968_New()) {
 			im::TreeNode("Command registers", &openCommand, [&]{
 				static constexpr auto cmdRegs = std::to_array<uint8_t>({
 					32, 33, 34, 35,  36, 37, 38, 39,  40, 41, 42, 43,  44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58

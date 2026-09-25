@@ -152,6 +152,9 @@ inline void SpriteChecker::checkSprites1(int minLine, int maxLine)
 			if (colorAttrib & 0x80) sip.x -= 32;
 			sip.colorAttrib = colorAttrib;
 
+			// In SpriteMode1, set the palette set number to 0.
+			sip.paletteSet = 0x00;
+
 			spriteCount[line] = visibleIndex + 1;
 		}
 	}
@@ -282,8 +285,10 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 
 	// Because it gave a measurable performance boost, we duplicated the
 	// code for planar and non-planar modes.
+	bool isEPAL = vdp.isEPAL();
 	int sprite = vdp.isSPS() ? (vdp.getSpsTopPlane() & 31) : 0;
 	if (planar) {
+		uint8_t currentPaletteSet = 0x00;
 		auto [attributePtr0, attributePtr1] =
 			vram.spriteAttribTable.getReadAreaPlanar<32 * 4>(512);
 		// TODO: Verify CC implementation.
@@ -323,12 +328,17 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 				if (colorAttrib & 0x80) sip.x -= 32;
 				sip.colorAttrib = colorAttrib;
 
+				// Set the pallet-set number in EPAL mode
+				if ((colorAttrib & 0x40) == 0x00) currentPaletteSet = (attributePtr1[2 * sprite + 1] << 4) & 0xF0;
+				sip.paletteSet = isEPAL ? currentPaletteSet : 0x00;
+
 				// set sentinel (see below)
 				spriteBuffer[line][visibleIndex + 1].colorAttrib = 0;
 				spriteCount[line] = visibleIndex + 1;
 			}
 		}
 	} else {
+		uint8_t currentPaletteSet = 0x00;
 		auto attributePtr0 =
 			vram.spriteAttribTable.getReadArea<32 * 4>(512);
 		// TODO: Verify CC implementation.
@@ -372,6 +382,10 @@ inline void SpriteChecker::checkSprites2(int minLine, int maxLine)
 				sip.x = attributePtr0[4 * sprite + 1];
 				if (colorAttrib & 0x80) sip.x -= 32;
 				sip.colorAttrib = colorAttrib;
+
+				// Set the pallet-set number in EPAL mode
+				if ((colorAttrib & 0x40) == 0x00) currentPaletteSet = (attributePtr0[4 * sprite + 3] << 4) & 0xF0;
+				sip.paletteSet = isEPAL ? currentPaletteSet : 0x00;
 
 				// Set sentinel. Sentinel is actually only
 				// needed for sprites with CC=1.

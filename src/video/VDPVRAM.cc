@@ -47,9 +47,9 @@ VDPVRAM::LogicalVRAMDebuggable::LogicalVRAMDebuggable(const VDP& vdp_)
 unsigned VDPVRAM::LogicalVRAMDebuggable::transform(unsigned address)
 {
 	const auto& vram = OUTER(VDPVRAM, logicalVRAMDebug);
-	if (!vram.vdp.getDisplayMode().isPlanar()) {
+	if (!vram.vdp.isPlanar()) {
 		return address;
-	} else if (vram.vdp.hasEVR()) {
+	} else if (vram.vdp.canEVR()) {
 		return ((address & 0x20000) | ((address << 16) & 0x10000) | ((address >> 1) & 0x0FFFF)) & 0x3FFFF;
 	} else {
 		return ((address << 16) | (address >> 1)) & 0x1FFFF;
@@ -130,7 +130,8 @@ VDPVRAM::VDPVRAM(VDP& vdp_, unsigned size, EmuTime time)
 	// Whole VRAM is cacheable.
 	// Because this window has no observer, any EmuTime can be passed.
 	// TODO: Move this to cache registration.
-	bitmapCacheWindow.setMask(vdp.hasEVR() ? 0x3FFFF : 0x1FFFF, vdp.hasEVR() ? (~0u << 18) : (~0u << 17), EmuTime::zero());
+	bitmapCacheWindow.setMask(vdp.canEVR() ? 0x3FFFF : 0x1FFFF,
+							  vdp.canEVR() ? (~0u << 18) : (~0u << 17), EmuTime::zero());
 }
 
 void VDPVRAM::clear()
@@ -146,12 +147,12 @@ void VDPVRAM::clear()
 	}
 }
 
-void VDPVRAM::updateDisplayMode(DisplayMode mode, bool cmdBit, EmuTime time)
+void VDPVRAM::updateDisplayMode(DisplayMode mode, bool cmdBit, bool sp3Bit, EmuTime time)
 {
 	assert(vdp.isInsideFrame(time));
 	cmdEngine->updateDisplayMode(mode, cmdBit, time);
 	renderer->updateDisplayMode(mode, time);
-	spriteChecker->updateDisplayMode(mode, time);
+	spriteChecker->updateDisplayMode(mode, sp3Bit, time);
 }
 
 void VDPVRAM::updateDisplayEnabled(bool enabled, EmuTime time)
@@ -245,7 +246,8 @@ void VDPVRAM::setRenderer(Renderer* newRenderer, EmuTime time)
 	bitmapVisibleWindow.resetObserver();
 	// Set up bitmapVisibleWindow to full VRAM.
 	// TODO: Have VDP/Renderer set the actual range.
-	bitmapVisibleWindow.setMask(vdp.hasEVR() ? 0x3FFFF : 0x1FFFF, vdp.hasEVR() ? (~0u << 18) : (~0u << 17), time);
+	bitmapVisibleWindow.setMask(vdp.canEVR() ? 0x3FFFF : 0x1FFFF,
+	                            vdp.canEVR() ? (~0u << 18) : (~0u << 17), time);
 	// TODO: If it is a good idea to send an initial sync,
 	//       then call setObserver before setMask.
 	bitmapVisibleWindow.setObserver(renderer);

@@ -195,8 +195,8 @@ struct Graphic4Mode
 	static constexpr uint8_t PIXELS_PER_BYTE = 2;
 	static constexpr uint8_t PIXELS_PER_BYTE_SHIFT = 1;
 	static constexpr unsigned PIXELS_PER_LINE = 256;
-	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM);
-	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM);
+	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
+	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
 	template<typename LogOp>
 	static void pset(EmuTime time, VDPVRAM& vram,
 		unsigned x, unsigned addr, uint8_t src, uint8_t color, LogOp op);
@@ -204,7 +204,7 @@ struct Graphic4Mode
 };
 
 inline unsigned Graphic4Mode::addressOf(
-	unsigned x, unsigned y, bool evr, bool extVRAM)
+	unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
 	if (evr) {
 		return ((y & 2047) << 7) | ((x & 255) >> 1);
@@ -216,9 +216,9 @@ inline unsigned Graphic4Mode::addressOf(
 }
 
 inline uint8_t Graphic4Mode::point(
-	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM)
+	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
-	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM))
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM, false))
 		>> (((~x) & 1) << 2)) & 15;
 }
 
@@ -249,8 +249,8 @@ struct Graphic5Mode
 	static constexpr uint8_t PIXELS_PER_BYTE = 4;
 	static constexpr uint8_t PIXELS_PER_BYTE_SHIFT = 2;
 	static constexpr unsigned PIXELS_PER_LINE = 512;
-	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM);
-	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM);
+	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
+	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
 	template<typename LogOp>
 	static void pset(EmuTime time, VDPVRAM& vram,
 		unsigned x, unsigned addr, uint8_t src, uint8_t color, LogOp op);
@@ -258,7 +258,7 @@ struct Graphic5Mode
 };
 
 inline unsigned Graphic5Mode::addressOf(
-	unsigned x, unsigned y, bool evr, bool extVRAM)
+	unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
 	if (evr) {
 		return ((y & 2047) << 7) | ((x & 511) >> 2);
@@ -270,9 +270,9 @@ inline unsigned Graphic5Mode::addressOf(
 }
 
 inline uint8_t Graphic5Mode::point(
-	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM)
+	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
-	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM))
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM, false))
 		>> (((~x) & 3) << 1)) & 3;
 }
 
@@ -305,8 +305,8 @@ struct Graphic6Mode
 	static constexpr uint8_t PIXELS_PER_BYTE = 2;
 	static constexpr uint8_t PIXELS_PER_BYTE_SHIFT = 1;
 	static constexpr unsigned PIXELS_PER_LINE = 512;
-	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM);
-	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM);
+	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
+	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
 	template<typename LogOp>
 	static void pset(EmuTime time, VDPVRAM& vram,
 		unsigned x, unsigned addr, uint8_t src, uint8_t color, LogOp op);
@@ -314,21 +314,31 @@ struct Graphic6Mode
 };
 
 inline unsigned Graphic6Mode::addressOf(
-	unsigned x, unsigned y, bool evr, bool extVRAM)
+	unsigned x, unsigned y, bool evr, bool extVRAM, bool planar)
 {
-	if (evr) {
-		return ((x & 2) << 15) | ((y & 511) << 7) | ((x & 511) >> 2) | ((y & 512) << 8);
-	} else if (!extVRAM) [[likely]] {
-		return ((x & 2) << 15) | ((y & 511) << 7) | ((x & 511) >> 2);
+	if (planar) {
+		if (evr) {
+			return ((x & 2) << 15) | ((y & 511) << 7) | ((x & 511) >> 2) | ((y & 512) << 8);
+		} else if (!extVRAM) [[likely]] {
+			return ((x & 2) << 15) | ((y & 511) << 7) | ((x & 511) >> 2);
+		} else {
+			return 0x20000         | ((y & 511) << 7) | ((x & 511) >> 2);
+		}
 	} else {
-		return 0x20000         | ((y & 511) << 7) | ((x & 511) >> 2);
+		if (evr) {
+			return ((y & 1023) << 8) | ((x & 511) >> 1);
+		} else if (!extVRAM) [[likely]] {
+			return ((y & 511) << 8) | ((x & 511) >> 1);
+		} else {
+			return 0x20000 | ((y & 511) << 8) | ((x & 511) >> 1);
+		}
 	}
 }
 
 inline uint8_t Graphic6Mode::point(
-	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM)
+	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar)
 {
-	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM))
+	return (vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM, planar))
 		>> (((~x) & 1) << 2)) & 15;
 }
 
@@ -359,8 +369,8 @@ struct Graphic7Mode
 	static constexpr uint8_t PIXELS_PER_BYTE = 1;
 	static constexpr uint8_t PIXELS_PER_BYTE_SHIFT = 0;
 	static constexpr unsigned PIXELS_PER_LINE = 256;
-	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM);
-	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM);
+	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
+	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
 	template<typename LogOp>
 	static void pset(EmuTime time, VDPVRAM& vram,
 		unsigned x, unsigned addr, uint8_t src, uint8_t color, LogOp op);
@@ -368,21 +378,31 @@ struct Graphic7Mode
 };
 
 inline unsigned Graphic7Mode::addressOf(
-	unsigned x, unsigned y, bool evr, bool extVRAM)
+	unsigned x, unsigned y, bool evr, bool extVRAM, bool planar)
 {
-	if (evr) {
-		return ((x & 1) << 16) | ((y & 511) << 7) | ((x & 255) >> 1) | ((y & 512) << 8);
-	} else if (!extVRAM) [[likely]] {
-		return ((x & 1) << 16) | ((y & 511) << 7) | ((x & 255) >> 1);
+	if (planar) {
+		if (evr) {
+			return ((x & 1) << 16) | ((y & 511) << 7) | ((x & 255) >> 1) | ((y & 512) << 8);
+		} else if (!extVRAM) [[likely]] {
+			return ((x & 1) << 16) | ((y & 511) << 7) | ((x & 255) >> 1);
+		} else {
+			return 0x20000         | ((y & 511) << 7) | ((x & 255) >> 1);
+		}
 	} else {
-		return 0x20000         | ((y & 511) << 7) | ((x & 255) >> 1);
+		if (evr) {
+			return ((y & 1023) << 8) | (x & 255);
+		} else if (!extVRAM) [[likely]] {
+			return ((y & 511) << 8) | (x & 255);
+		} else {
+			return 0x20000 | ((y & 511) << 8) | (x & 255);
+		}
 	}
 }
 
 inline uint8_t Graphic7Mode::point(
-	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM)
+	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar)
 {
-	return vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM));
+	return vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM, planar));
 }
 
 template<typename LogOp>
@@ -411,8 +431,8 @@ struct NonBitmapMode
 	static constexpr uint8_t PIXELS_PER_BYTE = 1;
 	static constexpr uint8_t PIXELS_PER_BYTE_SHIFT = 0;
 	static constexpr unsigned PIXELS_PER_LINE = 256;
-	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM);
-	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM);
+	static unsigned addressOf(unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
+	static uint8_t point(const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool planar);
 	template<typename LogOp>
 	static void pset(EmuTime time, VDPVRAM& vram,
 		unsigned x, unsigned addr, uint8_t src, uint8_t color, LogOp op);
@@ -420,7 +440,7 @@ struct NonBitmapMode
 };
 
 inline unsigned NonBitmapMode::addressOf(
-	unsigned x, unsigned y, bool evr, bool extVRAM)
+	unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
 	if (evr) {
 		return ((y & 1023) << 8) | (x & 255);
@@ -432,9 +452,9 @@ inline unsigned NonBitmapMode::addressOf(
 }
 
 inline uint8_t NonBitmapMode::point(
-	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM)
+	const VDPVRAM& vram, unsigned x, unsigned y, bool evr, bool extVRAM, bool /*planar*/)
 {
-	return vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM));
+	return vram.cmdReadWindow.readNP(addressOf(x, y, evr, extVRAM, false));
 }
 
 template<typename LogOp>
@@ -450,6 +470,7 @@ inline uint8_t NonBitmapMode::duplicate(uint8_t color)
 	return color;
 }
 
+#if 0
 /** Incremental address calculation (byte based, no extended VRAM)
  */
 struct IncrByteAddr4
@@ -691,6 +712,7 @@ struct IncrShift7
 		return color;
 	}
 };
+#endif
 
 
 // Logical operations:
@@ -804,8 +826,8 @@ void VDPCmdEngine::startAbrt(EmuTime time)
   */
 void VDPCmdEngine::startPoint(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
 	nextAccessSlot(time);
 	setStatusChangeTime(EmuTime::zero()); // will finish soon
 }
@@ -815,9 +837,9 @@ void VDPCmdEngine::executePoint(EmuTime limit)
 {
 	if (engineTime >= limit) [[unlikely]] return;
 
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	if (bool doPoint = !srcExt || hasExtendedVRAM; doPoint) [[likely]] {
-		COL = Mode::point(vram, SX, SY, vdp.isEVR(), srcExt);
+		COL = Mode::point(vram, SX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 	} else {
 		COL = 0xFF;
 	}
@@ -827,10 +849,10 @@ void VDPCmdEngine::executePoint(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startPointHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitPoint, checkCache(false, Mode::addressOf(SX, SY, vdp.isEVR(), srcExt)));
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitPoint, checkCache(false, Mode::addressOf(SX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	setStatusChangeTime(EmuTime::zero()); // will finish soon
 }
 
@@ -839,9 +861,9 @@ void VDPCmdEngine::executePointHs(EmuTime limit)
 {
 	if (engineTime >= limit) [[unlikely]] return;
 
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	if (bool doPoint = !srcExt || hasExtendedVRAM; doPoint) [[likely]] {
-		COL = Mode::point(vram, SX, SY, vdp.isEVR(), srcExt);
+		COL = Mode::point(vram, SX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 	} else {
 		COL = 0xFF;
 	}
@@ -852,8 +874,8 @@ void VDPCmdEngine::executePointHs(EmuTime limit)
   */
 void VDPCmdEngine::startPset(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	nextAccessSlot(time);
 	setStatusChangeTime(EmuTime::zero()); // will finish soon
 	phase = 0;
@@ -862,9 +884,9 @@ void VDPCmdEngine::startPset(EmuTime time)
 template<typename Mode, typename LogOp>
 void VDPCmdEngine::executePset(EmuTime limit)
 {
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(DX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(DX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 
 	switch (phase) {
 	case 0:
@@ -890,10 +912,10 @@ void VDPCmdEngine::executePset(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startPsetHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitPset, checkCache(false, Mode::addressOf(DX, DY, vdp.isEVR(), dstExt)));
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitPset, checkCache(false, Mode::addressOf(DX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	setStatusChangeTime(EmuTime::zero()); // will finish soon
 	phase = 0;
 }
@@ -901,9 +923,9 @@ void VDPCmdEngine::startPsetHs(EmuTime time)
 template<typename Mode, typename LogOp>
 void VDPCmdEngine::executePsetHs(EmuTime limit)
 {
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(DX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(DX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 
 	switch (phase) {
 	case 0:
@@ -911,7 +933,7 @@ void VDPCmdEngine::executePsetHs(EmuTime limit)
 		if (doPset) [[likely]] {
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
-		nextAccessSlotHs(1, isHS() ? 0 : waitPset, checkCache(true, Mode::addressOf(DX, DY, vdp.isEVR(), dstExt)));
+		nextAccessSlotHs(1, isHS() ? 0 : waitPset, checkCache(true, Mode::addressOf(DX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		[[fallthrough]];
 	case 1:
 		if (engineTime >= limit) [[unlikely]] { phase = 1; break; }
@@ -930,8 +952,8 @@ void VDPCmdEngine::executePsetHs(EmuTime limit)
   */
 void VDPCmdEngine::startSrch(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
 	ASX = SX;
 	nextAccessSlot(time);
 	setStatusChangeTime(EmuTime::zero()); // we can find it any moment
@@ -946,14 +968,14 @@ void VDPCmdEngine::executeSrch(EmuTime limit)
 
 	// TODO use MXS or MXD here?
 	//  datasheet says MXD but MXS seems more logical
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
 	while (!calculator.limitReached()) {
 		auto p = [&] -> uint8_t {
 			if (doPoint) [[likely]] {
-				return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+				return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 			} else {
 				return 0xFF;
 			}
@@ -977,11 +999,11 @@ void VDPCmdEngine::executeSrch(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startSrchHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
 	ASX = SX;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitSrch, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitSrch, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	setStatusChangeTime(EmuTime::zero()); // we can find it any moment
 }
 
@@ -994,14 +1016,14 @@ void VDPCmdEngine::executeSrchHs(EmuTime limit)
 
 	// TODO use MXS or MXD here?
 	//  datasheet says MXD but MXS seems more logical
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
 	while (!calculator.limitReached()) {
 		auto p = [&] -> uint8_t {
 			if (doPoint) [[likely]] {
-				return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+				return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 			} else {
 				return 0xFF;
 			}
@@ -1019,7 +1041,7 @@ void VDPCmdEngine::executeSrchHs(EmuTime limit)
 			commandDone(calculator.getTime());
 			break;
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitSrch, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitSrch, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	}
 	engineTime = calculator.getTime();
 }
@@ -1028,8 +1050,8 @@ void VDPCmdEngine::executeSrchHs(EmuTime limit)
   */
 void VDPCmdEngine::startLine(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	ASX = ((NX - 1) >> 1);
 	ADX = DX;
@@ -1046,9 +1068,9 @@ void VDPCmdEngine::executeLine(EmuTime limit)
 	uint8_t CL = COL & Mode::COLOR_MASK;
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -1113,7 +1135,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(delta);
 		goto loop;
 	}
@@ -1126,14 +1148,14 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLineHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	ASX = ((NX - 1) >> 1);
 	ADX = DX;
 	ANX = 0;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLine, checkCache(false, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLine, checkCache(false, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	setStatusChangeTime(EmuTime::zero()); // TODO can still be optimized
 	phase = 0;
 }
@@ -1145,9 +1167,9 @@ void VDPCmdEngine::executeLineHs(EmuTime limit)
 	uint8_t CL = COL & Mode::COLOR_MASK;
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -1156,7 +1178,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPset) [[likely]] {
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitLine, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitLine, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		[[fallthrough]];
 	case 1: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
@@ -1213,7 +1235,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.nextHs(1, isHS() ? 0 : waitLine, checkCache(false, addr));
 		goto loop;
 	}
@@ -1228,11 +1250,11 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLmmv(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
 	nextAccessSlot(time);
@@ -1245,14 +1267,14 @@ void VDPCmdEngine::executeLmmv(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
 	uint8_t CL = COL & Mode::COLOR_MASK;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -1280,7 +1302,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(delta);
 		goto loop;
 	}
@@ -1350,15 +1372,15 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLmmvHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmv, checkCache(false, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmv, checkCache(false, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? (1 + 1) : (1 + 1 + waitLmmv + waitLmmv));
 	phase = 0;
 }
@@ -1368,14 +1390,14 @@ void VDPCmdEngine::executeLmmvHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
 	uint8_t CL = COL & Mode::COLOR_MASK;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
-	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -1384,7 +1406,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPset) [[likely]] {
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitLmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitLmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		[[fallthrough]];
 	case 1: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
@@ -1402,7 +1424,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.nextHs(1, isHS() ? 0 : waitLmmv, checkCache(false, addr));
 		goto loop;
 	}
@@ -1418,11 +1440,11 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLmmm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_pixel<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ASX = SX;
 	ADX = DX;
 	ANX = tmpNX;
@@ -1436,22 +1458,22 @@ void VDPCmdEngine::executeLmmm(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_pixel<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_2_pixel<Mode>(ASX, ADX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
 	case 0:
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPoint) [[likely]] {
-		       tmpSrc = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+		       tmpSrc = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 		} else {
 		       tmpSrc = 0xFF;
 		}
@@ -1481,7 +1503,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(delta);
 		goto loop;
 	}
@@ -1498,7 +1520,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 			if (doPset) [[likely]] {
 				auto p = [&] -> uint8_t {
 					if (doPoint) [[likely]] {
-						return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+						return Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 					} else {
 						return 0xFF;
 					}
@@ -1565,16 +1587,16 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLmmmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_pixel<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ASX = SX;
 	ADX = DX;
 	ANX = tmpNX;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? (1 + 1 + 1) : (1 + 1 + 1 + waitLmmm + waitLmmm + waitLmmm));
 	phase = 0;
 }
@@ -1584,22 +1606,22 @@ void VDPCmdEngine::executeLmmmHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_pixel<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_2_pixel<Mode>(ASX, ADX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
 	case 0:
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPoint) [[likely]] {
-		       tmpSrc = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+		       tmpSrc = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 		} else {
 		       tmpSrc = 0xFF;
 		}
@@ -1631,8 +1653,8 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
-		calculator.nextHs(1, isHS() ? 0 : waitLmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
+		calculator.nextHs(1, isHS() ? 0 : waitLmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 		goto loop;
 	}
 	default:
@@ -1647,8 +1669,8 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLmcm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(SX, NX, ARG);
 	ASX = SX;
@@ -1667,17 +1689,17 @@ void VDPCmdEngine::executeLmcm(EmuTime limit)
 
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(SX, NX, ARG);
-	unsigned tmpNY = clipNY_1(SY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(SY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ASX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 
 	// TODO we should (most likely) perform the actual read earlier and
 	//  buffer it, and on a CPU-IO-read start the next read (just like how
 	//  regular reading from VRAM works).
 	if (bool doPoint = !srcExt || hasExtendedVRAM; doPoint) [[likely]] {
-		COL = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+		COL = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 	} else {
 		COL = 0xFF;
 	}
@@ -1696,16 +1718,16 @@ void VDPCmdEngine::executeLmcm(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startLmcmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), false);	//vram.cmdWriteWindow.disable(time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), false);	//vram.cmdWriteWindow.disable(time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(SX, NX, ARG);
 	ASX = SX;
 	ANX = tmpNX;
 	transfer = true;
 	status |= TR;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmcm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmcm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	setStatusChangeTime(EmuTime::zero());
 }
 
@@ -1717,17 +1739,17 @@ void VDPCmdEngine::executeLmcmHs(EmuTime limit)
 
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(SX, NX, ARG);
-	unsigned tmpNY = clipNY_1(SY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(SY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ASX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 
 	// TODO we should (most likely) perform the actual read earlier and
 	//  buffer it, and on a CPU-IO-read start the next read (just like how
 	//  regular reading from VRAM works).
 	if (bool doPoint = !srcExt || hasExtendedVRAM; doPoint) [[likely]] {
-		COL = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt);
+		COL = Mode::point(vram, ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar());
 	} else {
 		COL = 0xFF;
 	}
@@ -1748,8 +1770,8 @@ void VDPCmdEngine::executeLmcmHs(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startLmmc(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
 	ADX = DX;
@@ -1766,11 +1788,11 @@ void VDPCmdEngine::executeLmmc(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
 
 	if (transfer) {
@@ -1781,7 +1803,7 @@ void VDPCmdEngine::executeLmmc(EmuTime limit)
 		//    - in next access slot read
 		//    - in next access slot write
 		if (doPset) [[likely]] {
-			unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+			unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 			Mode::pset(limit, vram, ADX, addr,
 			           tmpDst, col, LogOp());
@@ -1807,8 +1829,8 @@ void VDPCmdEngine::executeLmmc(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startLmmcHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
 	ADX = DX;
@@ -1817,8 +1839,8 @@ void VDPCmdEngine::startLmmcHs(EmuTime time)
 	// do not set 'transfer = true', this fixes bug#1014
 	// Baltak Rampage: characters in greetings part are one pixel offset
 	status |= TR;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmc, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLmmc, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 }
 
 template<typename Mode, typename LogOp>
@@ -1826,11 +1848,11 @@ void VDPCmdEngine::executeLmmcHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
 
 	if (transfer) {
@@ -1841,7 +1863,7 @@ void VDPCmdEngine::executeLmmcHs(EmuTime limit)
 		//    - in next access slot read
 		//    - in next access slot write
 		if (doPset) [[likely]] {
-			unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+			unsigned addr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 			tmpDst = vram.cmdWriteWindow.readNP(addr);
 			Mode::pset(limit, vram, ADX, addr,
 			           tmpDst, col, LogOp());
@@ -1871,11 +1893,11 @@ void VDPCmdEngine::executeLmmcHs(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startHmmv(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
 	nextAccessSlot(time);
@@ -1887,19 +1909,19 @@ void VDPCmdEngine::executeHmmv(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
 		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
 	while (!calculator.limitReached()) {
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              COL, calculator.getTime());
 		}
 		ADX += TX;
@@ -1922,7 +1944,7 @@ void VDPCmdEngine::executeHmmv(EmuTime limit)
 		bool doPset = !dstExt || hasExtendedVRAM;
 		while (engineTime < limit) {
 			if (doPset) [[likely]] {
-				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 					      COL, engineTime);
 			}
 			engineTime += delta;
@@ -1973,15 +1995,15 @@ void VDPCmdEngine::executeHmmv(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startHmmvHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? 1 : (1 + waitHmmv));
 }
 
@@ -1990,19 +2012,19 @@ void VDPCmdEngine::executeHmmvHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
 		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
 	while (!calculator.limitReached()) {
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              COL, calculator.getTime());
 		}
 		ADX += TX;
@@ -2015,7 +2037,7 @@ void VDPCmdEngine::executeHmmvHs(EmuTime limit)
 				break;
 			}
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitHmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitHmmv, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	}
 	engineTime = calculator.getTime();
 	calcFinishTime(tmpNX, tmpNY, isHS() ? 1 : (1 + waitHmmv));
@@ -2026,11 +2048,11 @@ void VDPCmdEngine::executeHmmvHs(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startHmmm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_byte<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ASX = SX;
 	ADX = DX;
 	ANX = tmpNX;
@@ -2044,14 +2066,14 @@ void VDPCmdEngine::executeHmmm(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_byte<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 	       ? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_2_byte<Mode>(
 		ASX, ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
@@ -2060,7 +2082,7 @@ void VDPCmdEngine::executeHmmm(EmuTime limit)
 	case 0:
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPoint) [[likely]] {
-			tmpSrc = vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt));
+			tmpSrc = vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar()));
 		} else {
 			tmpSrc = 0xFF;
 		}
@@ -2069,7 +2091,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 	case 1: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              tmpSrc, calculator.getTime());
 		}
 		ASX += TX; ADX += TX;
@@ -2099,12 +2121,12 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 			if (doPset) [[likely]] {
 				auto p = [&] -> uint8_t {
 					if (doPoint) [[likely]] {
-						return vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt));
+						return vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar()));
 					} else {
 						return 0xFF;
 					}
 				}();
-				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 					      p, engineTime);
 			}
 			engineTime += delta;
@@ -2160,16 +2182,16 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startHmmmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_byte<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ASX = SX;
 	ADX = DX;
 	ANX = tmpNX;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt)));
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? (1 + 1) : (1 + 1 + waitHmmm + waitHmmm));
 	phase = 0;
 }
@@ -2179,14 +2201,14 @@ void VDPCmdEngine::executeHmmmHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_2_byte<Mode>(SX, DX, NX, ARG);
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 	       ? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_2_byte<Mode>(
 		ASX, ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
@@ -2195,16 +2217,16 @@ void VDPCmdEngine::executeHmmmHs(EmuTime limit)
 	case 0:
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPoint) [[likely]] {
-			tmpSrc = vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt));
+			tmpSrc = vram.cmdReadWindow.readNP(Mode::addressOf(ASX, SY, vdp.isEVR(), srcExt, vdp.isPlanar()));
 		} else {
 			tmpSrc = 0xFF;
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitHmmm, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitHmmm, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		[[fallthrough]];
 	case 1: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              tmpSrc, calculator.getTime());
 		}
 		ASX += TX; ADX += TX;
@@ -2219,7 +2241,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitHmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitHmmm, checkCache(false, Mode::addressOf(ASX, SY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		goto loop;
 	}
 	default:
@@ -2234,12 +2256,12 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startYmmm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, 512, ARG);
 		// large enough so that it gets clipped
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
 	nextAccessSlot(time);
@@ -2253,7 +2275,7 @@ void VDPCmdEngine::executeYmmm(EmuTime limit)
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, 512, ARG);
 		// large enough so that it gets clipped
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
@@ -2262,7 +2284,7 @@ void VDPCmdEngine::executeYmmm(EmuTime limit)
 	// TODO does this use MXD for both read and write?
 	//  it says so in the datasheet, but it seems illogical
 	//  OTOH YMMM also uses DX for both read and write
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
@@ -2271,14 +2293,14 @@ void VDPCmdEngine::executeYmmm(EmuTime limit)
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPset) [[likely]] {
 			tmpSrc = vram.cmdReadWindow.readNP(
-			       Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt));
+			       Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt, vdp.isPlanar()));
 		}
 		calculator.next(Delta::D24);
 		[[fallthrough]];
 	case 1:
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              tmpSrc, calculator.getTime());
 		}
 		ADX += TX;
@@ -2305,8 +2327,8 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		while (engineTime < limit) {
 			if (doPset) [[likely]] {
 				uint8_t p = vram.cmdReadWindow.readNP(
-					      Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt));
-				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+					      Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt, vdp.isPlanar()));
+				vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 					      p, engineTime);
 			}
 			engineTime += delta;
@@ -2360,16 +2382,16 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startYmmmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, 512, ARG);
 		// large enough so that it gets clipped
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	ADX = DX;
 	ANX = tmpNX;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitYmmm, checkCache(false, Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitYmmm, checkCache(false, Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? (1 + 1) : (1 + 1 + waitYmmm + waitYmmm));
 	phase = 0;
 }
@@ -2380,7 +2402,7 @@ void VDPCmdEngine::executeYmmmHs(EmuTime limit)
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, 512, ARG);
 		// large enough so that it gets clipped
-	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_2(SY, DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
@@ -2389,7 +2411,7 @@ void VDPCmdEngine::executeYmmmHs(EmuTime limit)
 	// TODO does this use MXD for both read and write?
 	//  it says so in the datasheet, but it seems illogical
 	//  OTOH YMMM also uses DX for both read and write
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
 	auto calculator = getSlotCalculator(limit);
 
@@ -2398,14 +2420,14 @@ void VDPCmdEngine::executeYmmmHs(EmuTime limit)
 loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 		if (doPset) [[likely]] {
 			tmpSrc = vram.cmdReadWindow.readNP(
-			       Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt));
+			       Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt, vdp.isPlanar()));
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitYmmm, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitYmmm, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		[[fallthrough]];
 	case 1:
 		if (calculator.limitReached()) [[unlikely]] { phase = 1; break; }
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              tmpSrc, calculator.getTime());
 		}
 		ADX += TX;
@@ -2419,7 +2441,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		calculator.nextHs(1, isHS() ? 0 : waitYmmm, checkCache(false, Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt)));
+		calculator.nextHs(1, isHS() ? 0 : waitYmmm, checkCache(false, Mode::addressOf(ADX, SY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 		goto loop;
 	default:
 		UNREACHABLE;
@@ -2433,8 +2455,8 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startHmmc(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
 	ADX = DX;
@@ -2450,13 +2472,13 @@ void VDPCmdEngine::executeHmmc(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
 		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
 
 	if (transfer) {
@@ -2464,7 +2486,7 @@ void VDPCmdEngine::executeHmmc(EmuTime limit)
 		//  - wait for a byte
 		//  - on the next access slot write that byte
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              COL, limit);
 		}
 		transfer = false;
@@ -2484,8 +2506,8 @@ void VDPCmdEngine::executeHmmc(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startHmmcHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
 	ADX = DX;
@@ -2493,8 +2515,8 @@ void VDPCmdEngine::startHmmcHs(EmuTime time)
 	setStatusChangeTime(EmuTime::zero());
 	// do not set 'transfer = true', see startLmmc()
 	status |= TR;
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
-	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmc, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt)));
+	bool dstExt = getMXD(ARG, vdp.canEVR());
+	nextAccessSlotHs(time, 1, isHS() ? 0 : waitHmmc, checkCache(true, Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar())));
 }
 
 template<typename Mode>
@@ -2502,13 +2524,13 @@ void VDPCmdEngine::executeHmmcHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_byte<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX)
 		? -Mode::PIXELS_PER_BYTE : Mode::PIXELS_PER_BYTE;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_byte<Mode>(
 		ADX, ANX << Mode::PIXELS_PER_BYTE_SHIFT, ARG);
-	bool dstExt = getMXD(ARG, vdp.hasEVR());
+	bool dstExt = getMXD(ARG, vdp.canEVR());
 	bool doPset = !dstExt || hasExtendedVRAM;
 
 	if (transfer) {
@@ -2516,7 +2538,7 @@ void VDPCmdEngine::executeHmmcHs(EmuTime limit)
 		//  - wait for a byte
 		//  - on the next access slot write that byte
 		if (doPset) [[likely]] {
-			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt),
+			vram.cmdWrite(Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar()),
 			              COL, limit);
 		}
 		transfer = false;
@@ -2540,8 +2562,8 @@ void VDPCmdEngine::executeHmmcHs(EmuTime limit)
 template<typename Mode>
 void VDPCmdEngine::startLfmm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX * 8, ARG);
 	unsigned tmpNY = NY;
@@ -2549,7 +2571,7 @@ void VDPCmdEngine::startLfmm(EmuTime time)
 	ADY = DY;
 	ANX = tmpNX;
 	ANY = tmpNY;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	fontWidthCount = 0;
 	nextAccessSlot(time);
 	calcFinishTime(tmpNX, tmpNY, 64 + 32 + 24);
@@ -2565,9 +2587,9 @@ void VDPCmdEngine::executeLfmm(EmuTime limit)
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -2618,7 +2640,7 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(Delta::D1);
 		goto loop;
 	}
@@ -2632,8 +2654,8 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLfmmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX * 8, ARG);
 	unsigned tmpNY = NY;
@@ -2641,7 +2663,7 @@ void VDPCmdEngine::startLfmmHs(EmuTime time)
 	ADY = DY;
 	ANX = tmpNX;
 	ANY = tmpNY;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	fontWidthCount = 0;
 	nextAccessSlotHs(time, 1, isHS() ? 0 : waitLfmm, checkCache(false, ASA));
 	calcFinishTime(tmpNX, tmpNY, isHS() ? (1 + 1 + 1) : (1 + 1 + 1 + waitLfmm + waitLfmm + waitLfmm));
@@ -2657,9 +2679,9 @@ void VDPCmdEngine::executeLfmmHs(EmuTime limit)
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -2711,7 +2733,7 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, ADY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		if (fontWidthCount <= 0) {
 			calculator.nextHs(1, isHS() ? 0 : waitLfmm, checkCache(false, ASA));
 		}
@@ -2729,13 +2751,15 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLfmc(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), false);	//vram.cmdReadWindow.disable(time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), false);	//vram.cmdReadWindow.disable(time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
 	ADX = DX;
 	ANX = tmpNX;
 	fontWidthCount = 0;
+	fontColor = COL;
+	transfer = false;
 	setStatusChangeTime(EmuTime::zero());
 	status |= TR;
 	nextAccessSlot(time);
@@ -2747,13 +2771,13 @@ void VDPCmdEngine::executeLfmc(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 
 	switch (phase) {
@@ -2776,7 +2800,7 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 	case 2: {
 		if (calculator.limitReached()) [[unlikely]] { phase = 2; break; }
 		if (doPset) [[likely]] {
-			uint8_t col = (tmpSrc & 0x80) ? COL : vdp.getFontBackgroundColor();
+			uint8_t col = (tmpSrc & 0x80) ? fontColor : vdp.getFontBackgroundColor();
 			col &= Mode::COLOR_MASK;
 			Mode::pset(calculator.getTime(), vram, ADX, dstAddr,
 			           tmpDst, col, LogOp());
@@ -2793,7 +2817,7 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(Delta::D1);
 		goto loop;
 	}
@@ -2809,11 +2833,11 @@ loop:	if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLrmm(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ASX_12P8 = SX_12P8 = (SX | ((SX & 0x0800) ? ~0x07FF : 0x0000)) << 8;
 	ASY_12P8 = SY_12P8 = (SY | ((SY & 0x1000) ? ~0x0FFF : 0x0000)) << ((ARG & XHR) ? 9 : 8);
 	ADX = DX;
@@ -2828,15 +2852,15 @@ void VDPCmdEngine::executeLrmm(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 	signed x, y;
 
@@ -2847,7 +2871,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 			x = ASX_12P8 / 256;
 			y = (ARG & XHR) ? (ASY_12P8 / 512) : (ASY_12P8 / 256);
 			if ((signed)WSX <= x && x <= (signed)WEX && (signed)WSY <= y && y <= (signed)WEY) {
-			    tmpSrc = Mode::point(vram, (unsigned)x, (unsigned)y, vdp.isEVR(), srcExt);
+			    tmpSrc = Mode::point(vram, (unsigned)x, (unsigned)y, vdp.isEVR(), srcExt, vdp.isPlanar());
 			} else {
 				tmpSrc = COL;
 			}
@@ -2890,7 +2914,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 		calculator.next(Delta::D1);
 		goto loop;
 	}
@@ -2904,20 +2928,20 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 template<typename Mode>
 void VDPCmdEngine::startLrmmHs(EmuTime time)
 {
-	setReadMask(time, vram, vdp.hasEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
-	setWriteMask(time, vram, vdp.hasEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
+	setReadMask(time, vram, vdp.canEVR(), true);	//vram.cmdReadWindow .setMask(0x3FFFF, ~0u << 18, time);
+	setWriteMask(time, vram, vdp.canEVR(), true);	//vram.cmdWriteWindow.setMask(0x3FFFF, ~0u << 18, time);
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	ASX_12P8 = SX_12P8 = (SX | ((SX & 0x0800) ? ~0x07FF : 0x0000)) << 8;
 	ASY_12P8 = SY_12P8 = (SY | ((SY & 0x1000) ? ~0x0FFF : 0x0000)) << ((ARG & XHR) ? 9 : 8);
 	ADX = DX;
 	ANX = tmpNX;
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
 	signed x = (signed)ASX_12P8 / 256;
 	signed y = (signed)ASY_12P8 / 256;
 	if ((signed)WSX <= x && x <= (signed)WEX && (signed)WSY <= y && y <= (signed)WEY) {
-		nextAccessSlotHs(time, 1, isHS() ? 0 : waitLrmm, checkCache(false, Mode::addressOf(x, y, vdp.isEVR(), srcExt)));
+		nextAccessSlotHs(time, 1, isHS() ? 0 : waitLrmm, checkCache(false, Mode::addressOf(x, y, vdp.isEVR(), srcExt, vdp.isPlanar())));
 	} else {
 		nextAccessSlotHs(time, 1, isHS() ? 0 : waitLrmm, VDPCmdCache::CachePenalty::CACHE_NONE);
 	}
@@ -2930,15 +2954,15 @@ void VDPCmdEngine::executeLrmmHs(EmuTime limit)
 {
 	NY &= getYBitMask(vdp.isEVR());
 	unsigned tmpNX = clipNX_1_pixel<Mode>(DX, NX, ARG);
-	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.hasEVR());
+	unsigned tmpNY = clipNY_1(DY, NY, ARG, vdp.canEVR());
 	int TX = (ARG & DIX) ? -1 : 1;
 	int TY = (ARG & DIY) ? -1 : 1;
 	ANX = clipNX_1_pixel<Mode>(ADX, ANX, ARG);
-	bool srcExt  = getMXS(ARG, vdp.hasEVR());
-	bool dstExt  = getMXD(ARG, vdp.hasEVR());
+	bool srcExt  = getMXS(ARG, vdp.canEVR());
+	bool dstExt  = getMXD(ARG, vdp.canEVR());
 	bool doPoint = !srcExt || hasExtendedVRAM;
 	bool doPset  = !dstExt || hasExtendedVRAM;
-	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+	unsigned dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 	auto calculator = getSlotCalculator(limit);
 	signed x, y;
 	
@@ -2949,7 +2973,7 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 			x = ASX_12P8 / 256;
 			y = (ARG & XHR) ? (ASY_12P8 / 512) : (ASY_12P8 / 256);
 			if ((signed)WSX <= x && x <= (signed)WEX && (signed)WSY <= y && y <= (signed)WEY) {
-			    tmpSrc = Mode::point(vram, x, y, vdp.isEVR(), srcExt);
+			    tmpSrc = Mode::point(vram, x, y, vdp.isEVR(), srcExt, vdp.isPlanar());
 			} else {
 				tmpSrc = COL;
 			}
@@ -2993,12 +3017,12 @@ loop:		if (calculator.limitReached()) [[unlikely]] { phase = 0; break; }
 				break;
 			}
 		}
-		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt);
+		dstAddr = Mode::addressOf(ADX, DY, vdp.isEVR(), dstExt, vdp.isPlanar());
 
 		x = ASX_12P8 / 256;
 		y = (ARG & XHR) ? (ASY_12P8 / 512) : (ASY_12P8 / 256);
 		if ((signed)WSX <= x && x <= (signed)WEX && (signed)WSY <= y && y <= (signed)WEY) {
-			calculator.nextHs(1, isHS() ? 0 : waitLrmm, checkCache(false, Mode::addressOf(x, y, vdp.isEVR(), srcExt)));
+			calculator.nextHs(1, isHS() ? 0 : waitLrmm, checkCache(false, Mode::addressOf(x, y, vdp.isEVR(), srcExt, vdp.isPlanar())));
 		} else {
 			calculator.nextHs(1, isHS() ? 0 : waitLrmm, VDPCmdCache::CachePenalty::CACHE_NONE);
 		}
@@ -3059,11 +3083,11 @@ void VDPCmdEngine::reset(EmuTime time)
 
 void VDPCmdEngine::setCmdReg(uint8_t index, uint8_t value, EmuTime time)
 {
-	const uint16_t maskSX  = vdp.hasECOM() ? 0x0FFF : 0x01FF;
-	const uint16_t maskSY  = vdp.hasECOM() ? 0x1FFF : 0x03FF;
+	const uint16_t maskSX  = vdp.canECOM() ? 0x0FFF : 0x01FF;
+	const uint16_t maskSY  = vdp.canECOM() ? 0x1FFF : 0x03FF;
 	const uint16_t maskDX  = 0x01FF;
-	const uint16_t maskDY  = vdp.hasECOM() ? 0x07FF : 0x03FF;
-	const uint16_t maskNX  = vdp.hasECOM() ? 0x07FF : 0x01FF;
+	const uint16_t maskDY  = vdp.canECOM() ? 0x07FF : 0x03FF;
+	const uint16_t maskNX  = vdp.canECOM() ? 0x07FF : 0x01FF;
 	const uint16_t maskNY  = vdp.isEVR()   ? 0x07FF : 0x03FF;
 	const uint8_t  maskARG = vdp.isECOM()  ? 0xFF   : 0x3F;
 
@@ -3135,7 +3159,7 @@ void VDPCmdEngine::setCmdReg(uint8_t index, uint8_t value, EmuTime time)
 		break;
 	case 0x0E: // command
 		CMD = value;
-		if (vdp.hasECOM() && (CMD & 0xF0) != 0x30) {
+		if (vdp.canECOM() && (CMD & 0xF0) != 0x30) {
 			// Register Clipping at VDP Command Start for V9968
 			SX &= 0x01FF;
 			NX &= 0x01FF;
