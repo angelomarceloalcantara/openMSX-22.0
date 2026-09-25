@@ -32,6 +32,7 @@ jobs:
           fetch-depth: 0
 
       - name: DIAGNÓSTICO - inspecionar src/meson.build e src/console
+        shell: bash
         run: |
           echo "===== git status ====="
           git status
