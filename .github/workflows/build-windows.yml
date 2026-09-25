@@ -42,7 +42,7 @@ jobs:
       - name: Build openMSX
         shell: msys2 {0}
         run: |
-          python3 build/detect.py
+          ./configure
           mingw32-make -j$(nproc)
 
       - name: Organize output bundle
