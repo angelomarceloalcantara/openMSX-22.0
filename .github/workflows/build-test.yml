@@ -1,25 +1,28 @@
 # ============================================================================
 # .github/workflows/build-windows-test-upstream.yml
 #
-# TESTE DE DIAGNÓSTICO: mesmo pipeline do build-windows.yml, mas apontando
-# para o repositório OFICIAL openMSX/openMSX (branch master) em vez do fork.
+# TESTE DE DIAGNÓSTICO (v2): compila a tag ESTÁVEL RELEASE_21_0 do
+# repositório oficial openMSX/openMSX, em vez da branch master.
 #
-# Objetivo: confirmar que o pipeline MSYS2 + Meson/Ninja está correto.
-# Se este workflow compilar com sucesso, o problema é 100% no fork
-# angelomarceloalcantara/openMSX-22.0 (branch msx2pp) — provavelmente o
-# meson.build desatualizado referenciando console/CommandConsole.cc, que
-# não existe mais nessa branch.
+# Por quê: testamos o master oficial e ele FALHOU com o mesmo erro do fork
+# (console/CommandConsole.cc não existe). Isso indica que o master está,
+# neste momento, num estado de transição/instável (o console antigo Tcl
+# está sendo substituído por um novo console baseado em ImGui, e o
+# src/meson.build aparentemente ainda não foi atualizado para refletir
+# isso). Uma release taggeada não deveria sofrer desse problema.
 #
-# Depois de confirmar, você pode apagar este arquivo de teste.
+# Se ESTE workflow compilar com sucesso: confirma que o pipeline
+# MSYS2/Meson está correto, e que o problema é branch/commit específico
+# (master instável), não do seu fork nem do workflow.
 # ============================================================================
 
-name: TESTE - Build Windows (openMSX oficial)
+name: TESTE - Build Windows (openMSX RELEASE_21_0)
 
 on:
   workflow_dispatch: {}
 
 jobs:
-  build-windows-upstream:
+  build-windows-upstream-release:
     runs-on: windows-latest
 
     defaults:
@@ -27,11 +30,11 @@ jobs:
         shell: msys2 {0}
 
     steps:
-      - name: Checkout do repositório OFICIAL openMSX/openMSX
+      - name: Checkout do repositório OFICIAL openMSX/openMSX (tag RELEASE_21_0)
         uses: actions/checkout@v4
         with:
           repository: openMSX/openMSX
-          ref: master
+          ref: RELEASE_21_0
           fetch-depth: 0
 
       - name: Configurar MSYS2 + MinGW64 e instalar dependências
@@ -66,4 +69,4 @@ jobs:
       - name: Confirmar binário gerado
         run: |
           ls -la build/openmsx.exe
-          echo "SUCESSO: o pipeline MSYS2/Meson funciona no repositório oficial."
+          echo "SUCESSO: o pipeline MSYS2/Meson funciona na release estável."
