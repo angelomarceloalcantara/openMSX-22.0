@@ -1,0 +1,86 @@
+# ============================================================================
+# .github/workflows/build-windows.yml
+#
+# Compila o openMSX (branch msx2pp) para Windows usando MSYS2 + MinGW-w64 +
+# Meson/Ninja, e disponibiliza o resultado como artifact para download.
+#
+# COMO USAR:
+#   1. Copie este arquivo para: .github/workflows/build-windows.yml
+#      dentro do seu repositório (crie as pastas se não existirem).
+#   2. Faça commit e push.
+#   3. Vá na aba "Actions" do repositório no GitHub — o build roda
+#      automaticamente. Ao terminar, baixe o artifact "openmsx-windows-x64"
+#      na página da execução (run).
+#
+# Também pode ser disparado manualmente pela aba Actions
+# ("Run workflow" -> workflow_dispatch).
+# ============================================================================
+
+name: Build Windows (MSYS2/MinGW64)
+
+on:
+  push:
+    branches: [ msx2pp ]
+  pull_request:
+    branches: [ msx2pp ]
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar MSYS2 + MinGW64 e instalar dependências
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-tcl
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-openal
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-libtheora
+            mingw-w64-x86_64-freetype
+
+      - name: Configurar build (Meson)
+        run: meson setup build --buildtype=release
+
+      - name: Compilar (Ninja via Meson)
+        run: meson compile -C build
+
+      - name: Listar DLLs necessárias e montar pasta de distribuição
+        run: |
+          mkdir -p dist
+          cp build/openmsx.exe dist/
+          cp -r share dist/share
+          # Copia as DLLs do MinGW64 das quais o executável depende
+          ldd build/openmsx.exe | grep mingw64 | awk '{print $3}' | while read -r dll; do
+            cp "$dll" dist/ 2>/dev/null || true
+          done
+
+      - name: Enviar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmsx-windows-x64
+          path: dist/
+          retention-days: 14
