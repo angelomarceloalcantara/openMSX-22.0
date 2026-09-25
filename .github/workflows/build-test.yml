@@ -1,0 +1,69 @@
+# ============================================================================
+# .github/workflows/build-windows-test-upstream.yml
+#
+# TESTE DE DIAGNÓSTICO: mesmo pipeline do build-windows.yml, mas apontando
+# para o repositório OFICIAL openMSX/openMSX (branch master) em vez do fork.
+#
+# Objetivo: confirmar que o pipeline MSYS2 + Meson/Ninja está correto.
+# Se este workflow compilar com sucesso, o problema é 100% no fork
+# angelomarceloalcantara/openMSX-22.0 (branch msx2pp) — provavelmente o
+# meson.build desatualizado referenciando console/CommandConsole.cc, que
+# não existe mais nessa branch.
+#
+# Depois de confirmar, você pode apagar este arquivo de teste.
+# ============================================================================
+
+name: TESTE - Build Windows (openMSX oficial)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build-windows-upstream:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout do repositório OFICIAL openMSX/openMSX
+        uses: actions/checkout@v4
+        with:
+          repository: openMSX/openMSX
+          ref: master
+          fetch-depth: 0
+
+      - name: Configurar MSYS2 + MinGW64 e instalar dependências
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_ttf
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-tcl
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-openal
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-libtheora
+            mingw-w64-x86_64-freetype
+
+      - name: Configurar build (Meson)
+        run: meson setup build --buildtype=release
+
+      - name: Compilar (Ninja via Meson)
+        run: meson compile -C build
+
+      - name: Confirmar binário gerado
+        run: |
+          ls -la build/openmsx.exe
+          echo "SUCESSO: o pipeline MSYS2/Meson funciona no repositório oficial."
